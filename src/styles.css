@@ -3224,3 +3224,311 @@ svg {
 .mobile-nav > button.active {
   color: #496535;
 }
+
+/* Connected workspace, intentionally shared between desktop and installed mobile app. */
+.rich-text {
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+  color: var(--text, #29362e);
+}
+.rich-text img {
+  max-width: 100%;
+  max-height: 650px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+.rich-text pre {
+  white-space: pre-wrap;
+  background: #eef2ed;
+  padding: 16px;
+  border-radius: 10px;
+  overflow: auto;
+}
+.rich-text table {
+  border-collapse: collapse;
+  max-width: 100%;
+  display: block;
+  overflow: auto;
+}
+.rich-text td,
+.rich-text th {
+  border: 1px solid #c8d2c8;
+  padding: 8px;
+}
+.rich-text blockquote {
+  border-left: 3px solid #698371;
+  padding-left: 16px;
+  margin-left: 0;
+}
+.rich-text svg {
+  max-width: 100%;
+  height: auto;
+}
+.rich-text .katex {
+  white-space: normal;
+}
+.assistant-box {
+  margin: 16px 0;
+  border: 1px solid #d6dfd6;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f6f8f3;
+}
+.assistant-panel {
+  padding-top: 12px;
+  font-size: 14px;
+}
+.assistant-panel p {
+  color: #435b49;
+  line-height: 1.6;
+}
+.assistant-actions,
+.note-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  align-items: center;
+}
+.assistant-panel textarea {
+  min-height: 75px;
+}
+.ai-result {
+  border-top: 1px solid #c9d6c8;
+  margin-top: 16px;
+  padding-top: 12px;
+  max-height: 500px;
+  overflow: auto;
+}
+.search-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  border: 1px solid #ccd6cb;
+  border-radius: 8px;
+  background: white;
+  margin: 6px 0;
+}
+.search-hit small {
+  display: block;
+  margin-top: 6px;
+}
+.file-input {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+}
+.note-tools select {
+  max-width: 100%;
+  border: 1px solid #ccd6cb;
+  padding: 9px;
+  border-radius: 8px;
+}
+.install-bar {
+  padding: 16px 0;
+  color: #435b49;
+  font-size: 13px;
+}
+.install-bar p {
+  max-width: 640px;
+  line-height: 1.6;
+}
+.sync-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 24px;
+  color: #435b49;
+  background: #eef3eb;
+  font-size: 13px;
+}
+.mfa-page {
+  max-width: 500px;
+  margin: 8vh auto;
+  padding: 24px;
+  line-height: 1.6;
+}
+.mfa-page h1 {
+  margin-top: 32px;
+}
+.mfa-qr {
+  width: 220px;
+  max-width: 100%;
+}
+.mfa-page code {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .kanban {
+    scroll-snap-type: x mandatory;
+  }
+  .kanban-column {
+    scroll-snap-align: start;
+  }
+  .note-tools .button {
+    font-size: 12px;
+  }
+  .assistant-actions .button {
+    flex: 1;
+  }
+}
+
+.column-tabs {
+  display: none;
+}
+@media (max-width: 700px) {
+  .column-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .column-tabs .button {
+    flex: 1;
+    font-size: 12px;
+    padding: 8px;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #17211c;
+  --white: #202d25;
+  --ink: #e5eee5;
+  --muted: #abbcac;
+  --line: #3c4e40;
+  --green: #aacbb0;
+  --green-dark: #c4ddc7;
+  --green-light: #304637;
+  color: #e5eee5;
+  background: #17211c;
+}
+[data-theme='dark'] body,
+[data-theme='dark'] .workspace,
+[data-theme='dark'] .main-content {
+  background: #17211c;
+  color: #e5eee5;
+}
+[data-theme='dark']
+  :is(
+    .sidebar,
+    .topbar,
+    .project-card,
+    .note-editor,
+    .notes-list,
+    .ticket-card,
+    .modal,
+    .mobile-nav,
+    .search-hit,
+    .assistant-box,
+    .assistant-panel,
+    .note-preview,
+    .kanban-column,
+    .new-project-card
+  ) {
+  background: #202d25;
+  color: #e5eee5;
+  border-color: #3c4e40;
+}
+[data-theme='dark'] :is(input, textarea, select, .button.secondary, .rich-text pre, .sync-summary) {
+  background: #26372b;
+  color: #e5eee5;
+  border-color: #526753;
+}
+[data-theme='dark']
+  :is(
+    p,
+    small,
+    .eyebrow,
+    .breadcrumbs,
+    .note-date,
+    .assistant-panel p,
+    .install-bar,
+    .rich-text,
+    .page-footnote,
+    .text-button,
+    .back-link,
+    .save-status,
+    .note-bottom
+  ) {
+  color: #b9ccbc;
+}
+[data-theme='dark'] :is(h1, h2, h3, .project-card h3, .ticket-open, .note-title-input) {
+  color: #eef4ec;
+}
+[data-theme='dark'] .button.primary {
+  background: #b5d0b9;
+  color: #15271b;
+}
+.all-issues {
+  margin: 16px 0;
+}
+.all-issues select {
+  margin-top: 8px;
+  padding: 6px;
+  max-width: 100%;
+}
+/* Enriched notes grow with their tools; fixed-height flex panels must not overlap. */
+.notes-layout {
+  height: auto;
+  min-height: 650px;
+  align-items: start;
+}
+.notes-list {
+  max-height: 75vh;
+}
+.note-editor {
+  height: auto;
+  min-height: 650px;
+}
+.note-writing {
+  flex: none;
+  min-height: 0;
+}
+.note-writing > * {
+  flex-shrink: 0;
+}
+.note-content-input {
+  flex: none;
+  min-height: 240px;
+  resize: vertical;
+}
+.note-editor > .note-tools {
+  padding: 0 24px;
+}
+@media (max-width: 700px) {
+  .notes-layout,
+  .note-editor {
+    min-height: 500px;
+    height: auto;
+  }
+  .note-writing {
+    flex: none;
+  }
+}
+
+.notes-layout {
+  max-height: none;
+}
+.touch-grip {
+  touch-action: none;
+  user-select: none;
+}
+.ticket-topline .icon-button {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 3px;
+}
+.image-zoom {
+  padding: 16px;
+  overflow: auto;
+  max-height: 75vh;
+}
+.image-zoom img {
+  max-height: 70vh;
+}
+.rich-text img,
+.diagram-source svg {
+  cursor: zoom-in;
+}

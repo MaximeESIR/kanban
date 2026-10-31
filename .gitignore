@@ -9,3 +9,7 @@ coverage/
 .DS_Store
 artifacts/
 playwright-report/
+
+worker/.venv/
+__pycache__/
+*.pyc

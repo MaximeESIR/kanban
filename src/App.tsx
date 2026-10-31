@@ -12,6 +12,16 @@ import {
   WifiOff,
   X,
 } from 'lucide-react'
+import { AssistantProvider } from './components/Assistant'
+import { MfaGate } from './components/MfaGate'
+import { InstallApp } from './components/InstallApp'
+import {
+  offlineRepository,
+  recoverConflicts,
+  clearOffline,
+  exportOffline,
+  syncEvent,
+} from './lib/offline'
 import { Auth } from './components/Auth'
 import { Projects, Board } from './components/Projects'
 import { Notes } from './components/Notes'
@@ -122,6 +132,7 @@ export default function App() {
     } else {
       const result = await supabase!.auth.signOut({ scope: 'local' })
       if (result.error) throw result.error
+      if (identity) await clearOffline(identity.id)
       setIdentity(null)
     }
     finishRecovery()
@@ -149,14 +160,17 @@ export default function App() {
         }}
       />
     )
-  return (
-    <Workspace
-      key={identity.id}
-      identity={identity}
-      onLogout={logout}
-      onPassword={() => setRecovery(true)}
-    />
+  const workspace = (
+    <AssistantProvider enabled={!identity.demo}>
+      <Workspace
+        key={identity.id}
+        identity={identity}
+        onLogout={logout}
+        onPassword={() => setRecovery(true)}
+      />
+    </AssistantProvider>
   )
+  return identity.demo ? workspace : <MfaGate onLogout={logout}>{workspace}</MfaGate>
 }
 
 function Workspace({
@@ -169,10 +183,19 @@ function Workspace({
   onPassword: () => void
 }) {
   const repo: Repository = useMemo(
-    () => (identity.demo ? createDemoRepository() : createRemoteRepository(identity.id)),
+    () =>
+      identity.demo
+        ? createDemoRepository()
+        : offlineRepository(identity.id, createRemoteRepository(identity.id)),
     [identity.demo, identity.id],
   )
   const [data, setData] = useState<Data>(emptyData)
+  const [sync, setSync] = useState({ pending: 0, conflicts: 0 })
+  useEffect(() => {
+    const handler = (e: Event) => setSync((e as CustomEvent).detail)
+    window.addEventListener(syncEvent, handler)
+    return () => window.removeEventListener(syncEvent, handler)
+  }, [])
   const [loaded, setLoaded] = useState(false),
     [loadError, setLoadError] = useState(''),
     [refreshing, setRefreshing] = useState(false)
@@ -227,7 +250,7 @@ function Workspace({
       },
       onOffline = () => setOnline(false)
     const pop = () => setRoute(readRoute())
-    const interval = setInterval(onFocus, 60000)
+    const interval = setInterval(onFocus, 3000)
     window.addEventListener('focus', onFocus)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
@@ -252,6 +275,31 @@ function Workspace({
     }
   }, [refresh])
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (
+        document.querySelector('dialog[open]') ||
+        /INPUT|TEXTAREA|SELECT/.test((e.target as HTMLElement)?.tagName) ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey
+      )
+        return
+      if (e.key === '/') {
+        e.preventDefault()
+        document.querySelector<HTMLInputElement>('main input[aria-label^="Rechercher"]')?.focus()
+      }
+      if (e.key === 'Escape') navigate({ view: 'projects' })
+      if (e.key === 'n') {
+        e.preventDefault()
+        if (route.view === 'notes') void createNote()
+        else if (project) setDialog({ kind: 'ticket', project })
+        else setDialog({ kind: 'project' })
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [route.view, route.project, data.projects])
   function navigate(next: Route) {
     const url = new URL(location.href)
     url.search = ''
@@ -311,9 +359,9 @@ function Workspace({
       announce(friendlyError(err), true)
     }
   }
-  async function createNote() {
+  async function createNote(category: 'pro' | 'perso' = 'pro') {
     try {
-      const note = await action(() => repo.note({ title: '', content: '' }))
+      const note = await action(() => repo.note({ title: '', content: '', category }))
       setData((d) => ({ ...d, notes: [note, ...d.notes] }))
       navigate({ view: 'notes', note: note.id })
       announce('Une nouvelle page pour vos idées.')
@@ -384,6 +432,13 @@ function Workspace({
   }
   async function leave(password = false) {
     if (!(await flushAll())) return
+    if (!identity.demo && sync.pending) {
+      announce(
+        'Attendez la synchronisation avant de vous déconnecter. La sauvegarde complète permet de conserver les changements en attente.',
+        true,
+      )
+      return
+    }
     try {
       if (password) onPassword()
       else await onLogout()
@@ -651,7 +706,7 @@ function Workspace({
             <WifiOff size={16} />
             {identity.demo
               ? 'Hors connexion — la démo reste disponible sur cet appareil.'
-              : 'Hors connexion — reconnectez-vous pour enregistrer vos modifications.'}
+              : 'Hors connexion — vos modifications restent sur cet appareil et seront synchronisées au retour du réseau.'}
           </div>
         )}
         {loaded && loadError && (
@@ -660,6 +715,30 @@ function Workspace({
             <button className="text-button" onClick={() => void refresh()}>
               Réessayer
             </button>
+          </div>
+        )}
+        {!identity.demo && (
+          <div className="sync-summary" role="status">
+            {sync.pending
+              ? `${sync.pending} modification(s) sur cet appareil, en attente de synchronisation`
+              : 'Synchronisé'}
+            {sync.conflicts > 0 &&
+              ` · ${sync.conflicts} conflit(s) : version locale conservée dans la sauvegarde`}
+            <button className="text-button" onClick={() => void exportOffline(identity.id)}>
+              Sauvegarde complète
+            </button>
+            {sync.conflicts > 0 && (
+              <button
+                className="text-button"
+                onClick={() =>
+                  void recoverConflicts(identity.id)
+                    .then(refresh)
+                    .catch((e) => announce(friendlyError(e), true))
+                }
+              >
+                Récupérer les conflits en notes
+              </button>
+            )}
           </div>
         )}
         <main className={`main-content ${route.view === 'notes' ? 'notes-page' : ''}`} id="main">
@@ -682,6 +761,20 @@ function Workspace({
             )
           ) : route.view === 'notes' ? (
             <Notes
+              assistantEnabled={!identity.demo}
+              projects={data.projects}
+              onToTicket={async (note, projectId) => {
+                await saveTicket({
+                  project_id: projectId,
+                  title: note.title.trim() || note.content.split('\n')[0].slice(0, 160) || 'Note',
+                  description: note.content.slice(0, 12000),
+                  status: 'todo',
+                  priority: 'medium',
+                  difficulty: 'medium',
+                  depends_on_id: null,
+                })
+                announce('Note copiée dans un ticket ; original conservé.')
+              }}
               notes={data.notes}
               selectedId={route.note}
               drafts={drafts.current}
@@ -690,13 +783,14 @@ function Workspace({
               busy={working > 0}
               onSelect={(note) => navigate({ view: 'notes', note })}
               onChange={editNote}
-              onCreate={() => void createNote()}
+              onCreate={(category) => void createNote(category)}
               onDelete={(note) => confirmDelete('notes', note)}
               onRetry={(id) => void flushNote(id).catch(() => {})}
             />
           ) : route.project ? (
             project ? (
               <Board
+                assistantEnabled={!identity.demo}
                 key={project.id}
                 project={project}
                 tickets={data.tickets.filter((t) => t.project_id === project.id)}
@@ -706,6 +800,11 @@ function Workspace({
                 onNewTicket={(status) => setDialog({ kind: 'ticket', project, status })}
                 onEditTicket={(ticket) => setDialog({ kind: 'ticket', project, ticket })}
                 onMove={(ticket, status) => void moveTicket(ticket, status)}
+                onReorder={(ticket, position) =>
+                  void saveTicket({ ...ticket, position }, ticket.id, true).catch((e) =>
+                    announce(friendlyError(e), true),
+                  )
+                }
               />
             ) : (
               <EmptyState
@@ -720,12 +819,18 @@ function Workspace({
             )
           ) : (
             <Projects
+              onTicket={(ticket) => {
+                const project = data.projects.find((p) => p.id === ticket.project_id)
+                if (project) setDialog({ kind: 'ticket', ticket, project })
+              }}
+              onMoveTicket={(ticket, status) => void moveTicket(ticket, status)}
               projects={data.projects}
               tickets={data.tickets}
               onOpen={(id) => navigate({ view: 'projects', project: id })}
               onCreate={() => setDialog({ kind: 'project' })}
             />
           )}
+          <InstallApp />
         </main>
       </div>
       {dialog?.kind === 'project' && (
@@ -740,6 +845,7 @@ function Workspace({
       )}
       {dialog?.kind === 'ticket' && (
         <TicketForm
+          assistantEnabled={!identity.demo}
           key={dialog.ticket?.id || 'new'}
           ticket={dialog.ticket}
           project={dialog.project}

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { Assistant } from './Assistant'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDownWideNarrow,
   ArrowLeft,
@@ -28,11 +29,15 @@ import {
 import { EmptyState, ProjectIcon } from './ui'
 
 export function Projects({
+  onTicket,
+  onMoveTicket,
   projects,
   tickets,
   onOpen,
   onCreate,
 }: {
+  onTicket: (ticket: Ticket) => void
+  onMoveTicket: (ticket: Ticket, status: Status) => void
   projects: Project[]
   tickets: Ticket[]
   onOpen: (id: string) => void
@@ -40,6 +45,7 @@ export function Projects({
 }) {
   const [query, setQuery] = useState(''),
     [sort, setSort] = useState('recent')
+  const [allIssues, setAllIssues] = useState(false)
   const filtered = projects
     .filter((p) => matchesSearch(query, p.name, p.description))
     .sort((a, b) =>
@@ -191,12 +197,48 @@ export function Projects({
           </button>
         </div>
       )}
+      <button className="button secondary" onClick={() => setAllIssues(!allIssues)}>
+        {allIssues ? 'Masquer tous les tickets' : 'Tous les tickets'}
+      </button>
+      {allIssues && (
+        <section className="all-issues" aria-label="Tous les tickets">
+          {[...tickets]
+            .sort(
+              (a, b) =>
+                ['urgent', 'high', 'medium', 'low'].indexOf(a.priority) -
+                  ['urgent', 'high', 'medium', 'low'].indexOf(b.priority) ||
+                a.project_id.localeCompare(b.project_id),
+            )
+            .map((t) => (
+              <article key={t.id} className="search-hit">
+                <button className="text-button" onClick={() => onTicket(t)}>
+                  {t.title}
+                </button>
+                <small>
+                  {projects.find((p) => p.id === t.project_id)?.name} · {priorities[t.priority]}
+                </small>
+                <select
+                  aria-label={`Statut global ${t.title}`}
+                  value={t.status}
+                  onChange={(e) => onMoveTicket(t, e.target.value as Status)}
+                >
+                  {statuses.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </article>
+            ))}
+        </section>
+      )}
       <p className="page-footnote">Les grandes idées avancent à petits pas.</p>
     </>
   )
 }
 
 export function Board({
+  assistantEnabled,
   project,
   tickets,
   busy,
@@ -205,7 +247,9 @@ export function Board({
   onNewTicket,
   onEditTicket,
   onMove,
+  onReorder,
 }: {
+  assistantEnabled: boolean
   project: Project
   tickets: Ticket[]
   busy: boolean
@@ -214,7 +258,9 @@ export function Board({
   onNewTicket: (status: Status) => void
   onEditTicket: (ticket: Ticket) => void
   onMove: (ticket: Ticket, status: Status) => void
+  onReorder: (ticket: Ticket, position: number) => void
 }) {
+  const [showArchive, setShowArchive] = useState(false)
   const [query, setQuery] = useState(''),
     [priority, setPriority] = useState('all'),
     [dragging, setDragging] = useState<string | null>(null),
@@ -222,12 +268,63 @@ export function Board({
   const selected = tickets.filter(
     (t) =>
       matchesSearch(query, t.title, t.description, `#${t.number}`) &&
-      (priority === 'all' || t.priority === priority),
+      (priority === 'all' || t.priority === priority) &&
+      (showArchive || t.status !== 'done' || Date.now() - Date.parse(t.updated_at) < 7 * 86400000),
   )
+  const boardRef = useRef<HTMLDivElement>(null)
+  const touch = useRef<{ timer?: ReturnType<typeof setTimeout>; active: boolean }>({
+    active: false,
+  })
+  useEffect(
+    () => () => {
+      if (touch.current.timer) clearTimeout(touch.current.timer)
+    },
+    [],
+  )
+  function touchEnd(x: number, y: number, ticket: Ticket) {
+    if (touch.current.timer) clearTimeout(touch.current.timer)
+    if (touch.current.active) {
+      const hit = document.elementFromPoint(x, y),
+        target = tickets.find(
+          (t) => t.id === hit?.closest<HTMLElement>('[data-ticket-id]')?.dataset.ticketId,
+        )
+      const status = hit?.closest<HTMLElement>('[data-column]')?.dataset.column as
+        Status | undefined
+      if (target && target.id !== ticket.id && target.status === ticket.status)
+        onReorder(ticket, (target.position || 0) - 0.5)
+      else if (status && status !== ticket.status && statuses.some((s) => s.id === status))
+        onMove(ticket, status)
+    }
+    touch.current.active = false
+    setDragging(null)
+    setOver(null)
+  }
   const done = tickets.filter((t) => t.status === 'done').length
   const filtered = Boolean(query || priority !== 'all')
   return (
     <>
+      <button
+        className="text-button"
+        onClick={() => {
+          const lines = [
+            `# ${project.name}`,
+            ...statuses.flatMap((s) => [
+              `\n## ${s.label}`,
+              ...tickets
+                .filter((t) => t.status === s.id)
+                .map((t) => `- [${s.id === 'done' ? 'x' : ' '}] ${t.title}\n\n${t.description}\n`),
+            ]),
+          ]
+          const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/markdown' }))
+          const a = document.createElement('a')
+          a.href = url
+          a.download = 'projet.md'
+          a.click()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }}
+      >
+        Exporter en Markdown
+      </button>
       <button className="back-link" onClick={onBack}>
         <ArrowLeft size={16} /> Tous les projets
       </button>
@@ -254,6 +351,14 @@ export function Board({
         </div>
       </header>
       {project.description && <p className="board-description">{project.description}</p>}
+      <Assistant
+        enabled={assistantEnabled}
+        searchDocs={tickets.map((t) => ({ id: t.id, title: t.title, content: t.description }))}
+        onOpen={(id) => {
+          const t = tickets.find((t) => t.id === id)
+          if (t) onEditTicket(t)
+        }}
+      />
       <div className="board-overview">
         <span>
           <Layers3 size={15} /> {tickets.length} ticket{tickets.length !== 1 ? 's' : ''}
@@ -310,12 +415,37 @@ export function Board({
           )}
         </div>
       </div>
-      <div className="kanban">
+      <button className="text-button" onClick={() => setShowArchive(!showArchive)}>
+        {showArchive
+          ? 'Masquer les anciens tickets terminés'
+          : 'Afficher les anciens tickets terminés'}
+      </button>
+      <nav className="column-tabs" aria-label="Colonnes du tableau">
+        {statuses.map((status, i) => (
+          <button
+            className="button secondary"
+            key={status.id}
+            onClick={() =>
+              boardRef.current?.children[i]?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+                inline: 'start',
+              })
+            }
+          >
+            {status.label}
+          </button>
+        ))}
+      </nav>
+      <div ref={boardRef} className="kanban">
         {statuses.map((status) => {
-          const items = selected.filter((t) => t.status === status.id)
+          const items = selected
+            .filter((t) => t.status === status.id)
+            .sort((a, b) => (a.position || 0) - (b.position || 0) || a.number - b.number)
           return (
             <section
               key={status.id}
+              data-column={status.id}
               className={`kanban-column ${over === status.id ? 'drag-over' : ''}`}
               aria-label={status.label}
               onDragOver={(e) => {
@@ -351,12 +481,13 @@ export function Board({
                 </button>
               </div>
               <div className="column-content">
-                {items.map((ticket) => {
+                {items.map((ticket, ticketIndex) => {
                   const blocked = isBlocked(ticket, tickets),
                     dependency = tickets.find((t) => t.id === ticket.depends_on_id)
                   return (
                     <article
                       key={ticket.id}
+                      data-ticket-id={ticket.id}
                       className={`ticket-card ${dragging === ticket.id ? 'dragging' : ''} ${ticket.status === 'done' ? 'completed' : ''}`}
                       draggable={!busy}
                       onDragStart={(e) => {
@@ -370,12 +501,65 @@ export function Board({
                       }}
                     >
                       <div className="ticket-topline">
+                        <button
+                          className="icon-button"
+                          aria-label={`Monter ${ticket.title}`}
+                          disabled={busy || ticketIndex === 0}
+                          onClick={() =>
+                            onReorder(ticket, (items[ticketIndex - 1]?.position || 0) - 1)
+                          }
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label={`Descendre ${ticket.title}`}
+                          disabled={busy || ticketIndex === items.length - 1}
+                          onClick={() =>
+                            onReorder(ticket, (items[ticketIndex + 1]?.position || 0) + 1)
+                          }
+                        >
+                          ↓
+                        </button>
                         <span className="ticket-number">#{ticket.number}</span>
                         <span className={`priority priority-${ticket.priority}`}>
                           <span />
                           {priorities[ticket.priority]}
                         </span>
-                        <GripVertical className="drag-handle" size={15} aria-hidden="true" />
+                        <button
+                          className="icon-button touch-grip"
+                          aria-label={`Déplacer par appui long ${ticket.title}`}
+                          disabled={busy}
+                          onPointerDown={(e) => {
+                            if (e.pointerType === 'mouse') return
+                            e.currentTarget.setPointerCapture(e.pointerId)
+                            touch.current.active = false
+                            touch.current.timer = setTimeout(() => {
+                              touch.current.active = true
+                              setDragging(ticket.id)
+                            }, 350)
+                          }}
+                          onPointerMove={(e) => {
+                            if (touch.current.active) {
+                              const status = document
+                                .elementFromPoint(e.clientX, e.clientY)
+                                ?.closest<HTMLElement>('[data-column]')?.dataset.column as
+                                Status | undefined
+                              setOver(status || null)
+                            }
+                          }}
+                          onPointerUp={(e) => {
+                            if (e.pointerType !== 'mouse') touchEnd(e.clientX, e.clientY, ticket)
+                          }}
+                          onPointerCancel={() => {
+                            if (touch.current.timer) clearTimeout(touch.current.timer)
+                            touch.current.active = false
+                            setDragging(null)
+                            setOver(null)
+                          }}
+                        >
+                          <GripVertical size={15} />
+                        </button>
                       </div>
                       <button className="ticket-open" onClick={() => onEditTicket(ticket)}>
                         <h3>{ticket.title}</h3>

@@ -1,3 +1,5 @@
+import { RichText } from './RichText'
+import { Assistant } from './Assistant'
 import { useState, type FormEvent } from 'react'
 import { Check, Trash2 } from 'lucide-react'
 import {
@@ -135,6 +137,7 @@ export function ProjectForm({
 }
 
 export function TicketForm({
+  assistantEnabled = false,
   ticket,
   project,
   tickets,
@@ -143,6 +146,7 @@ export function TicketForm({
   onSave,
   onDelete,
 }: {
+  assistantEnabled?: boolean
   ticket?: Ticket
   project: Project
   tickets: Ticket[]
@@ -162,6 +166,7 @@ export function TicketForm({
   })
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('')
+  const [preview, setPreview] = useState(false)
   const dependencies = dependencyOptions(tickets, project.id, ticket?.id)
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -185,6 +190,24 @@ export function TicketForm({
       wide
       busy={busy}
     >
+      <div className="modal-form">
+        <button className="text-button" type="button" onClick={() => setPreview(!preview)}>
+          {preview ? 'Masquer le rendu' : 'Lire la description'}
+        </button>
+        {preview && <RichText text={input.description} />}
+        <Assistant
+          targetId={ticket?.id}
+          enabled={assistantEnabled}
+          text={input.description}
+          onApply={(description) => {
+            if (description.length > 12000)
+              setError(
+                'Le résultat dépasse les 12 000 caractères du ticket. Copiez-le dans une note.',
+              )
+            else setInput({ ...input, description })
+          }}
+        />
+      </div>
       <form className="modal-form" onSubmit={submit}>
         <label className="field">
           Titre du ticket <span className="required">*</span>

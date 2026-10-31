@@ -1,0 +1,17 @@
+[Unit]
+Description=Atelier local assistant (outbound only)
+After=network-online.target
+[Service]
+Type=simple
+WorkingDirectory=%h/Documents/kanban
+EnvironmentFile=%h/.config/atelier/worker.env
+ExecStart=%h/Documents/kanban/worker/.venv/bin/python %h/Documents/kanban/worker/atelier_worker.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+[Install]
+WantedBy=default.target

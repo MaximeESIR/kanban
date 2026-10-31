@@ -100,7 +100,7 @@ test('projects and tickets: create, edit, move, dependencies, deletion', async (
       .getByRole('heading', { name: 'Première étape', exact: true }),
   ).toBeVisible()
   await expect(second.getByRole('button', { name: /Dépendance terminée/ })).toBeVisible()
-  await first.getByRole('button', { name: /Première étape/ }).click()
+  await first.locator('.ticket-open').click()
   await expect(
     page.getByRole('dialog').getByLabel('Dépend d’un autre ticket').getByRole('option'),
   ).toHaveCount(1)
@@ -189,4 +189,37 @@ test('main screens have no automated WCAG A/AA violations', async ({ page }) => 
   await page.keyboard.press('Escape')
   await navigate(page, 'Notes')
   await audit()
+})
+
+test('rich notes, math, diagrams, safe rendering, conversion, and disconnected PC', async ({
+  page,
+}) => {
+  await login(page)
+  await navigate(page, 'Notes')
+  await page.getByRole('button', { name: 'Nouvelle note', exact: true }).click()
+  await page.getByLabel('Titre de la note', { exact: true }).fill('Document enrichi')
+  await page
+    .getByLabel('Contenu de la note', { exact: true })
+    .fill(
+      '# Mon titre\n\n**Gras** et $x^2$\n\n```mermaid\nflowchart LR\n A[Web] --> B[PC]\n```\n\n<script>alert(1)</script>\n\n![externe](https://example.invalid/tracker.png)',
+    )
+  await page.getByRole('button', { name: 'Lire le rendu', exact: true }).click()
+  await expect(page.locator('.rich-text h1')).toHaveText('Mon titre')
+  await expect(page.locator('.rich-text .katex')).toBeVisible()
+  await expect(page.locator('.diagram-source svg')).toBeVisible({ timeout: 15000 })
+  await expect(page.locator('.rich-text script')).toHaveCount(0)
+  await expect(page.locator('.rich-text img')).toHaveCount(0)
+  await page
+    .getByRole('button', { name: /Assistant PC/ })
+    .last()
+    .click()
+  await expect(
+    page.getByText('La démo ne peut pas contacter votre ordinateur.', { exact: false }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Dicter', exact: true })).toBeDisabled()
+  await page.getByLabel('Projet destinataire de la note').selectOption({ index: 1 })
+  await page.getByRole('button', { name: 'Créer le ticket', exact: true }).click()
+  await expect(
+    page.getByText('Note copiée dans un ticket ; original conservé.', { exact: true }),
+  ).toBeVisible()
 })

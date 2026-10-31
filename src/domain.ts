@@ -31,6 +31,7 @@ export interface Project {
   updated_at: string
 }
 export interface Ticket {
+  position?: number
   id: string
   owner_id: string
   project_id: string
@@ -45,6 +46,7 @@ export interface Ticket {
   updated_at: string
 }
 export interface Note {
+  category?: 'pro' | 'perso'
   id: string
   owner_id: string
   title: string
@@ -60,9 +62,16 @@ export interface Data {
 export type ProjectInput = Pick<Project, 'name' | 'description' | 'color'>
 export type TicketInput = Pick<
   Ticket,
-  'project_id' | 'title' | 'description' | 'priority' | 'difficulty' | 'status' | 'depends_on_id'
+  | 'project_id'
+  | 'title'
+  | 'description'
+  | 'priority'
+  | 'difficulty'
+  | 'status'
+  | 'depends_on_id'
+  | 'position'
 >
-export type NoteInput = Pick<Note, 'title' | 'content'>
+export type NoteInput = Pick<Note, 'title' | 'content' | 'category'>
 export const emptyData = (): Data => ({ projects: [], tickets: [], notes: [] })
 
 export function validateProject(input: ProjectInput) {
@@ -139,5 +148,26 @@ export function matchesSearch(query: string, ...values: string[]) {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLocaleLowerCase('fr')
-  return normalize(values.join(' ')).includes(normalize(query.trim()))
+  const haystack = normalize(values.join(' '))
+  return normalize(query)
+    .trim()
+    .split(/\s+/)
+    .every((word) => {
+      if (!word || haystack.includes(word)) return true
+      for (
+        let start = haystack.indexOf(word[0]);
+        start >= 0;
+        start = haystack.indexOf(word[0], start + 1)
+      ) {
+        let j = 1
+        for (
+          let i = start + 1;
+          i < Math.min(haystack.length, start + word.length * 2 + 2) && j < word.length;
+          i++
+        )
+          if (haystack[i] === word[j]) j++
+        if (j === word.length) return true
+      }
+      return false
+    })
 }

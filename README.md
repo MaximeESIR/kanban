@@ -1,10 +1,20 @@
-# Atelier
+# Atelier — V1.0
 
 Application personnelle de projets, kanban et notes. Interface React / TypeScript adaptée à l’ordinateur et au téléphone, déployable sur GitHub Pages. Supabase assure l’authentification et le stockage privé. Aucune exécution de code ni aucun agent de développement n’est intégré.
 
+## V1.0 : application installable et assistant PC
+
+- [Brancher Supabase, la double authentification et le PC](docs/CONNEXION-PC.md)
+- [Journal de réalisation, incidents et limites de vérification](docs/JOURNAL-V1.md)
+- [Comparatif détaillé avec le projet de référence](docs/COMPARATIF-V1.md)
+
+La version en ligne reste une démo tant que Supabase n’est pas configuré. Les boutons IA sont visibles mais désactivés : aucune simulation ne se fait passer pour un résultat de votre PC. Une fois connecté, le service Python réalise les traitements locaux et le navigateur récupère les résultats sans rechargement.
+
+Sur Android, ouvrir le site puis « Installer l’application » (ou le menu Chrome). Sur iPhone, ouvrir avec Safari puis Partager → Sur l’écran d’accueil. La première ouverture en ligne télécharge les fichiers nécessaires au mode hors connexion. Il s’agit d’une PWA, pas d’un binaire distribué sur les stores.
+
 ## Version en ligne temporaire
 
-Adresse prévue après déploiement : **https://MaximeESIR.github.io/kanban/**.
+Adresse de l’application : **https://MaximeESIR.github.io/kanban/**.
 
 Connexion temporaire : **`k@k.k` / `k`**. Ces identifiants sont publics : ce mode est une démonstration, pas une authentification sécurisée. Les projets, tickets et notes sont enregistrés dans le navigateur de chaque appareil. Ils ne sont ni partagés entre visiteurs ni synchronisés entre votre ordinateur et votre téléphone. Effacer le stockage du navigateur efface ces données ; utilisez l’export JSON pour les conserver.
 
@@ -14,7 +24,7 @@ Dans les paramètres du dépôt, choisir **Settings → Pages → Source → Git
 
 ## Essayer en local
 
-Prérequis : Node.js 20.19 ou supérieur (Node 22 recommandé).
+Prérequis : Node.js 22.12 ou supérieur.
 
 ```bash
 npm ci
@@ -43,7 +53,7 @@ Sur une adresse publique, la démo nécessite `VITE_PUBLIC_DEMO=true` au moment 
 - Tickets : titre, description, priorité, difficulté et dépendance facultative vers un ticket du même projet. Les cycles sont interdits dans l’interface et dans la base. Une dépendance inachevée est signalée sans empêcher de déplacer le ticket.
 - Notes avec recherche et enregistrement automatique après 700 ms d’inactivité. Changer d’écran n’annule pas l’enregistrement. Les erreurs de sauvegarde sont affichées ; la déconnexion attend la sauvegarde des notes.
 - Export JSON des projets, tickets et notes avec le bouton de téléchargement. L’import de sauvegardes n’est pas implémenté.
-- Actualisation à la reprise de la fenêtre et toutes les 60 secondes. Le bouton d’actualisation récupère immédiatement les changements d’un autre appareil.
+- Actualisation à la reprise de la fenêtre et toutes les 3 secondes. Le bouton d’actualisation récupère immédiatement les changements d’un autre appareil.
 
 ## Connecter Supabase
 
@@ -53,7 +63,7 @@ Créer un projet Supabase dédié. Dans **SQL Editor**, exécuter une seule fois
 
 `supabase/migrations/001_atelier.sql`
 
-Il crée les projets, tickets et notes, leurs contraintes et leurs règles RLS. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API.
+Puis exécuter `supabase/migrations/002_connected_workspace.sql`. Ces migrations créent les projets, tickets, notes, la file PC, la synchronisation et les règles RLS qui imposent désormais le TOTP. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API.
 
 ### 2. Fermer les inscriptions et créer votre compte
 
@@ -116,13 +126,17 @@ Le dépôt et les fichiers HTML/JS peuvent être publics : les mots de passe son
 npm test          # logique métier, configuration publique et sécurité PostgreSQL
 npm run build    # vérification TypeScript et génération de dist/
 npm run test:e2e  # parcours Chrome sur ordinateur et mobile
+npm run test:worker # service Python et moteurs simulés
+VITE_PUBLIC_DEMO=true npm run build
+npx playwright test -c playwright.production.config.ts # PWA, réouverture hors ligne
+npx playwright test -c playwright.connected.config.ts # protocole UI/PC avec serveur simulé
 ```
 
 Les tests navigateur utilisent `/usr/bin/google-chrome` s’il existe. Sinon, installer le navigateur de test avec `npx playwright install chromium`, ou définir `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Les captures et traces restent dans `artifacts/` (ignoré par Git).
 
 Les tests SQL appliquent la véritable migration à **PGlite**, un moteur PostgreSQL local, avec une simulation minimale des rôles Auth Supabase. Ils vérifient les accès anonymes, les comptes non autorisés, l’isolation entre propriétaires, l’usurpation d’identité, la révocation, les contraintes et les suppressions en cascade. Ils ne remplacent pas un test de bout en bout avec votre projet Supabase réel et ses paramètres d’authentification.
 
-La session réelle est conservée dans le navigateur par Supabase. Utiliser la déconnexion sur un appareil partagé. Les notes en cours d’écriture restent en mémoire jusqu’à leur sauvegarde ; en cas de coupure réseau, attendre « Enregistrée » avant de fermer l’onglet. Si deux appareils modifient simultanément la même donnée, la dernière sauvegarde l’emporte : cette V1 est destinée à un usage personnel, sans édition collaborative simultanée.
+La session réelle est conservée dans le navigateur par Supabase. Utiliser la déconnexion sur un appareil partagé. Les notes en cours d’écriture restent en mémoire jusqu’à leur sauvegarde ; en cas de coupure réseau, attendre « Enregistrée » avant de fermer l’onglet. Les modifications connectées passent par une file IndexedDB persistante. En cas de conflit de révision, la version distante est conservée et la version locale reste dans « Sauvegarde complète » ; aucune fusion automatique n’est tentée.
 
 ## Structure
 
