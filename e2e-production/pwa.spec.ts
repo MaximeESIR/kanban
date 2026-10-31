@@ -16,6 +16,7 @@ test('installed shell works offline, including a reload and persisted edits', as
         }),
       )
   })
+  await expect(page.getByText('Une mise à jour est prête.', { exact: false })).toHaveCount(0)
   const manifest = await page.evaluate(async () => {
     const link = document.querySelector<HTMLLinkElement>('link[rel=manifest]')!
     return (await fetch(link.href)).json()

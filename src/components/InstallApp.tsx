@@ -35,11 +35,10 @@ export function InstallApp() {
       void navigator.serviceWorker
         .register(new URL('sw.js', document.baseURI).href)
         .then((r) => {
-          if (r.waiting) setUpdate(true)
+          const refreshUpdate = () => setUpdate(Boolean(r.waiting && r.active))
+          refreshUpdate()
           r.addEventListener('updatefound', () => {
-            r.installing?.addEventListener('statechange', () => {
-              if (r.waiting) setUpdate(true)
-            })
+            r.installing?.addEventListener('statechange', refreshUpdate)
           })
         })
         .catch(() => setHelp(true))
