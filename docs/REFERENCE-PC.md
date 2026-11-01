@@ -6,15 +6,15 @@ Pour les actions à réaliser, utilise [le guide pas à pas](CONNEXION-PC.md). C
 
 | Partie | État réel |
 | --- | --- |
-| Site GitHub Pages / PWA installable sur téléphone | Interface utilisable en démo ; projets, notes riches, parents, prérequis, tri et brouillons testés. |
-| Compte privé, TOTP, synchronisation | Code et migrations prêts, règles testées avec PostgreSQL local ; projet Supabase créé (capture utilisateur), tables et comptes à confirmer. |
+| Site GitHub Pages / PWA installable sur téléphone | Version Supabase publiée ; écran personnel vérifié dans des navigateurs neufs sur ordinateur et mobile. |
+| Compte privé, TOTP, synchronisation | Connexion personnelle et TOTP confirmés par le propriétaire ; synchronisation entre appareils encore à vérifier. |
 | Dictée locale | faster-whisper small installé, transcription française réellement exécutée sur le PC. |
 | Résumé, réécriture, recherche | Ollama + Qwen3.5 4B installés, trois inférences réelles réussies sur le PC. |
 | Run, suivi et validation humaine | Interface, file SQL, scripts, agent et tests disponibles. Parcours navigateur testé sur serveur simulé ; worktree, processus et rapport testés avec exécuteur simulé. |
-| Exécution réelle Codex | CLI déjà connecté avec ChatGPT, mais **sandbox Ubuntu bloqué**. Run refuse de démarrer tant que le contrôle ne passe pas. |
-| Téléphone → Supabase hébergé → PC → téléphone | Pas encore vérifié : configuration des comptes et liaison PC non confirmées. |
+| Exécution réelle Codex | CLI connecté avec ChatGPT ; contrôle réel du sandbox réussi après corrections. Première tâche avec le modèle Codex encore à vérifier. |
+| Téléphone → Supabase hébergé → PC → téléphone | Compte PC, autorisation, heartbeat et abonnement Realtime vérifiés. Service système préparé ; installation administrateur et essai depuis le téléphone encore à faire. |
 
-Les identifiants publics `k@k.k` / `k` restent une démo **locale à chaque navigateur**. Ils ne protègent pas un compte privé et n’activent aucun traitement sur le PC. Pas de pourcentage artificiel de « fonctionnement global » : distinguer l’interface, les moteurs réellement testés et la connexion encore à activer.
+La publication connectée n’accepte plus les identifiants publics `k@k.k` / `k`. Les anciennes versions de démonstration restent **locales à chaque navigateur**. Ils ne protègent pas un compte privé et n’activent aucun traitement sur le PC. Pas de pourcentage artificiel de « fonctionnement global » : distinguer l’interface, les moteurs réellement testés et la connexion encore à activer.
 
 ## 2. Modèles déjà installés sur ce PC
 
@@ -55,9 +55,9 @@ Diagnostic :
 python3 worker/ticket_executor.py doctor
 ```
 
-Actuellement, Ubuntu 24.04 refuse la création du sandbox (`bwrap`, user namespaces, `Operation not permitted`). Le contrôle échoue donc avant toute inférence ou modification d’un dépôt. Les tests simulés ne prouvent pas une exécution réelle Codex.
+Le contrôle réussit désormais sur ce PC. Les causes corrigées étaient les clés TOML mal encodées dans les options CLI, le PATH absent empêchant de trouver `/usr/bin/bwrap`, le binaire standalone installé dans le dossier privé `.codex`, et le refus de création de socket mal interprété par le test. Une copie identique du binaire, vérifiée par SHA-256 et accessible seulement à son propriétaire, est conservée sous `~/.local/share/atelier/executions/runtime/`. Le dossier `.codex` reste interdit aux commandes du modèle. Les tests de sandbox ne prouvent pas encore une tâche réelle avec le modèle Codex.
 
-La [documentation officielle Ubuntu/Codex](https://learn.chatgpt.com/docs/sandboxing) propose un profil AppArmor ciblé. À faire par un administrateur sur ce PC, après vérification du profil fourni par le paquet :
+La [documentation officielle Ubuntu/Codex](https://learn.chatgpt.com/docs/sandboxing) propose un profil AppArmor ciblé. Cette installation a déjà été effectuée par le propriétaire sur ce PC ; commandes de référence pour une autre installation :
 
 ```bash
 sudo apt install apparmor-profiles apparmor-utils
@@ -67,7 +67,7 @@ sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
 python3 worker/ticket_executor.py doctor
 ```
 
-Si le fichier n’est pas fourni ou le contrôle échoue encore, conserver Run désactivé et examiner le diagnostic. **Ne pas désactiver globalement AppArmor ou les restrictions système, ne pas passer Codex en accès intégral.** Les droits administrateur non disponibles dans cette session empêchent d’appliquer et de vérifier cette correction ici.
+Si le fichier n’est pas fourni ou le contrôle échoue encore, conserver Run désactivé et examiner le diagnostic. **Ne pas désactiver globalement AppArmor ou les restrictions système, ne pas passer Codex en accès intégral.** L’installation du service système décrite ci-dessous reste une action administrateur.
 
 Le profil Codex limite les lectures et écritures, interdit les identifiants Atelier/Codex/SSH et le réseau des commandes, protège les métadonnées Git, désactive connecteurs, hooks et sous-agents. `--sandbox workspace-write` n’est pas ajouté : il écraserait les restrictions de lecture du profil nommé. Le contrôle exécute réellement une commande sans modèle et vérifie accès autorisé, refus d’accès privé, protection Git et réseau, à l’aide d’un témoin temporaire accessible seulement sur le loopback du PC. Sources : [permissions Codex](https://learn.chatgpt.com/docs/permissions), [mode non interactif](https://learn.chatgpt.com/docs/non-interactive-mode).
 
@@ -88,10 +88,10 @@ Après ajout d’un dépôt, régénérer le service ci-dessous : systemd doit p
 
 ## 5. Configurer et démarrer le service
 
-Sur ce PC, le service utilisateur et le fichier privé ont été préparés mais **le service Atelier n’est pas démarré**, faute de Supabase. Ollama, lui, fonctionne déjà.
+Sur ce PC, les identifiants privés sont renseignés et la connexion Supabase est vérifiée. Le service utilisateur échoue cependant avec `ProtectHome`/`ProtectSystem` : systemd crée un namespace utilisateur qui reçoit le profil AppArmor `unprivileged_userns`, incompatible ici avec l’isolation imbriquée de Codex. La solution préparée est un service système avec `User=` et `Group=` fixés au compte habituel, en conservant les protections. Le processus Atelier ne tourne jamais comme root. Ollama fonctionne déjà.
 
 ```bash
-python3 worker/install_service.py
+python3 worker/install_service.py --system
 ```
 
 Ce script crée le fichier privé s’il n’existe pas et génère l’unité systemd à partir des chemins autorisés. Il ne remplace pas vos identifiants existants et ne lance pas un service non configuré.
@@ -105,17 +105,19 @@ Renseigner dans `~/.config/atelier/worker.env` :
 
 Les chemins des modèles et leurs réglages sont déjà présents. Conserver `chmod 600 ~/.config/atelier/worker.env`. Les valeurs doivent respecter la syntaxe `EnvironmentFile` de systemd ; ne pas publier ce fichier.
 
+Le script suivant installe uniquement l’unité Atelier avec sudo, désactive l’ancien service utilisateur et lance le service système. `ExecStartPre` impose le diagnostic réel avant chaque démarrage. `AF_NETLINK` est autorisé au service pour que bubblewrap prépare son interface réseau isolée ; le réseau des commandes Codex reste interdit par son propre sandbox. Référence : [systemd 255 — namespaces des services utilisateur](https://www.freedesktop.org/software/systemd/man/255/systemd.exec.html).
+
 Après configuration et diagnostic :
 
 ```bash
-systemctl --user enable --now atelier-worker.service
-systemctl --user status atelier-worker.service
-journalctl --user -u atelier-worker.service -n 50
+bash /home/mblaret/Documents/kanban/worker/connect_pc.sh
+systemctl status atelier-worker.service
+sudo journalctl -u atelier-worker.service -n 50
 ```
 
-Après correction du sandbox, redémarrer le service pour refaire son contrôle initial. Pour arrêter : `systemctl --user stop atelier-worker.service`. Désactiver les démarrages futurs : `systemctl --user disable atelier-worker.service` (et `atelier-ollama.service` si souhaité).
+Après correction du sandbox, redémarrer le service pour refaire son contrôle initial. Pour arrêter : `sudo systemctl stop atelier-worker.service`. Désactiver les démarrages futurs : `sudo systemctl disable atelier-worker.service` (et `atelier-ollama.service` si souhaité).
 
-Le service vise **Linux** et utilise `fcntl`, les groupes de processus, le sandbox Codex et systemd. Aucun support Windows/macOS n’est revendiqué pour cet exécuteur. Le PC doit rester éveillé, connecté et dans une session où le service utilisateur fonctionne. Verrouiller l’écran n’arrête pas le service ; mise en veille ou fermeture de session peuvent l’arrêter.
+Le service vise **Linux** et utilise `fcntl`, les groupes de processus, le sandbox Codex et systemd. Aucun support Windows/macOS n’est revendiqué pour cet exécuteur. Le PC doit rester éveillé et connecté. Le service système reste disponible hors de la session graphique ; Ollama reste un service utilisateur, disponible pendant la session. Verrouiller l’écran n’arrête pas les traitements ; la mise en veille les interrompt.
 
 ## 6. Comment le PC reçoit les demandes
 

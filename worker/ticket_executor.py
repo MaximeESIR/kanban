@@ -1,6 +1,7 @@
 """One local Codex session. Repository paths and command flags never come from a ticket."""
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -82,7 +83,7 @@ def add_repository(path, label, config=CONFIG):
     rows.append(row);private_json(config,rows)
     return row
 
-def policy(worktree, scratch, common_git=None):
+def policy(worktree, scratch, common_git=None, runtime_binary=None):
     fs={':root':'deny',':minimal':'read',':tmpdir':'deny',':slash_tmp':'deny',str(scratch):'write'}
     # Git status/diff needs only this repository's metadata. No commits or branch changes by the model.
     if common_git: fs[str(common_git)]='read'
@@ -92,29 +93,69 @@ def policy(worktree, scratch, common_git=None):
     fs[str(Path.home()/'.config/atelier')]='deny'
     fs[str(Path.home()/'.codex')]='deny'
     fs[str(Path.home()/'.ssh')]='deny'
+    # The standalone CLI can live under ~/.codex and must re-enter its own
+    # executable after bubblewrap starts. Expose this exact binary only, not
+    # the surrounding credentials, sessions, configuration or plugins.
+    if runtime_binary: fs[str(Path(runtime_binary).resolve())]='read'
     options={
         'approval_policy':'never','default_permissions':'atelier','allow_login_shell':False,
         'web_search':'disabled','project_doc_max_bytes':0,
         'permissions.atelier.extends':':workspace',
         'permissions.atelier.network.enabled':False,
         'shell_environment_policy.inherit':'none','shell_environment_policy.experimental_use_profile':False,
-        f'projects.{json.dumps(str(worktree))}.trust_level':'untrusted',
+        # Without PATH the sandbox helper cannot locate distro bwrap and uses
+        # its bundled helper, which lacks Ubuntu's /usr/bin/bwrap profile.
+        'shell_environment_policy.set':{'PATH':'/usr/local/bin:/usr/bin:/bin'},
+        'projects':{str(worktree):{'trust_level':'untrusted'}},
+        'permissions.atelier.filesystem':fs,
+        'mcp_servers':{},
     }
-    options.update({f'permissions.atelier.filesystem.{json.dumps(k)}':v for k,v in fs.items()})
     options.update({f'features.{k}':False for k in FEATURES})
-    servers={'node_repl','cua_repl'}
-    config=Path.home()/'.codex/config.toml'
-    if config.exists():
-        servers.update(tomllib.loads(config.read_text()).get('mcp_servers',{}))
-    options.update({f'mcp_servers.{json.dumps(name)}.enabled':False for name in servers})
+    # Codex splits override keys on dots; quoted path segments are not TOML keys
+    # there. Use inline TOML tables so .git, dotted/quoted paths and MCP names
+    # remain intact. Replacing the whole MCP table also avoids creating invalid
+    # disabled server entries without a transport when user config is ignored.
+    def toml_value(value):
+        if isinstance(value,dict):
+            return '{'+', '.join(json.dumps(k,ensure_ascii=False)+' = '+toml_value(v) for k,v in value.items())+'}'
+        return json.dumps(value,ensure_ascii=False)
     args=[]
-    for k,v in options.items(): args += ['-c', k+'='+json.dumps(v)]
+    for k,v in options.items(): args += ['-c', k+'='+toml_value(v)]
     return args
 
 def codex_binary():
     p=shutil.which('codex')
     if not p: raise ExecutionError('Codex CLI absent. Installez-le et connectez-vous avec codex login.')
-    return str(Path(p).resolve())
+    source=Path(p).resolve()
+    # A standalone installation under the denied credentials directory cannot
+    # re-enter its executable inside bubblewrap. Use an identical private copy
+    # outside ~/.codex; never reopen the credentials directory to solve this.
+    if source.is_relative_to(Path.home()/'.codex'):
+        return str(runtime_binary(source))
+    return str(source)
+
+def runtime_binary(source, root=STATE/'runtime'):
+    def digest(path):
+        with path.open('rb') as f: return hashlib.file_digest(f,'sha256').hexdigest()
+    expected=digest(source)
+    folder=root/expected
+    if root.is_symlink() or folder.is_symlink(): raise ExecutionError('Le cache Codex ne doit pas être un lien symbolique.')
+    folder.mkdir(parents=True,exist_ok=True,mode=0o700)
+    target=folder/'codex'
+    if target.is_symlink(): raise ExecutionError('Le binaire Codex privé ne doit pas être un lien symbolique.')
+    if target.exists() and digest(target)==expected:
+        target.chmod(0o500)
+        return target
+    fd,name=tempfile.mkstemp(prefix='.codex-',dir=folder)
+    try:
+        with os.fdopen(fd,'wb') as dest, source.open('rb') as src:
+            shutil.copyfileobj(src,dest)
+            os.fchmod(dest.fileno(),0o500)
+        if digest(Path(name))!=expected: raise ExecutionError('Le binaire Codex a changé pendant sa préparation. Relancez le diagnostic.')
+        os.replace(name,target)
+    finally:
+        if os.path.exists(name): os.unlink(name)
+    return target
 
 def preflight(binary=None):
     """Real, non-inference sandbox probe, with a harmless private canary."""
@@ -123,17 +164,20 @@ def preflight(binary=None):
         base=Path(parent);work=base/'work';work.mkdir();scratch=work/'tmp';scratch.mkdir()
         secret=base/'private-canary';secret.write_text('not-a-real-secret')
         (work/'.git').mkdir();(work/'.git/config').write_text('canary')
+        (work/'.env').write_text('not-a-real-secret')
         script="""import pathlib,socket,sys
 w=pathlib.Path.cwd()
 (w/'allowed').write_text('ok')
-for path in [sys.argv[1],str(w/'.git/config')]:
+for path in [sys.argv[1],str(w/'.env'),str(w/'.git/config')]:
  try:
-  if path==sys.argv[1]: pathlib.Path(path).read_text()
-  else: pathlib.Path(path).write_text('forbidden')
+  if path==str(w/'.git/config'): pathlib.Path(path).write_text('forbidden')
+  else: pathlib.Path(path).read_text()
  except (OSError,PermissionError): pass
  else: raise SystemExit(21)
-s=socket.socket();s.settimeout(1)
-try:s.connect(('127.0.0.1',int(sys.argv[2])))
+try:
+ with socket.socket() as s:
+  s.settimeout(1)
+  s.connect(('127.0.0.1',int(sys.argv[2])))
 except OSError:pass
 else:raise SystemExit(22)
 print('ATELIER_SANDBOX_OK')
@@ -144,10 +188,26 @@ print('ATELIER_SANDBOX_OK')
             listener.bind(('127.0.0.1',0));listener.listen(2)
             port=listener.getsockname()[1]
             with socket.create_connection(('127.0.0.1',port),timeout=1):pass
-            cmd=[binary,'sandbox','-P','atelier','-C',str(work),*policy(work,scratch),'/usr/bin/python3','-c',script,str(secret),str(port)]
-            r=subprocess.run(cmd,env=clean_env(),capture_output=True,text=True,timeout=20)
+            cmd=[binary,'sandbox','-P','atelier','-C',str(work),*policy(work,scratch,runtime_binary=binary),'/usr/bin/python3','-c',script,str(secret),str(port)]
+            try:
+                r=subprocess.run(cmd,env=clean_env(),capture_output=True,text=True,timeout=20)
+            except subprocess.TimeoutExpired:
+                raise ExecutionError('Isolation Codex indisponible : le contrôle dépasse 20 secondes. Run reste désactivé.') from None
         if r.returncode or 'ATELIER_SANDBOX_OK' not in r.stdout:
-            raise ExecutionError('Isolation Codex indisponible. Exécutez ticket_executor.py doctor sur le PC ; Run reste désactivé.')
+            # Do not copy raw CLI output/configuration (potential credentials) to
+            # service logs or callers. Report a useful, fixed diagnostic instead.
+            reason=f'le contrôle a échoué (code {r.returncode})'
+            if 'invalid transport' in r.stderr or 'filesystem path' in r.stderr:
+                reason='la configuration transmise à Codex est invalide ; le script doit être corrigé'
+            elif 'bwrap: execvp' in r.stderr:
+                reason='un exécutable requis est inaccessible dans le profil d’isolation'
+            elif 'bwrap:' in r.stderr and ('Operation not permitted' in r.stderr or 'Permission denied' in r.stderr):
+                reason='Ubuntu refuse bubblewrap ; vérifiez le chargement du profil AppArmor'
+            elif r.returncode==21:
+                reason='la protection des fichiers privés ou des métadonnées Git a échoué'
+            elif r.returncode==22:
+                reason='le réseau des commandes reste accessible'
+            raise ExecutionError(f'Isolation Codex indisponible : {reason}. Run reste désactivé.')
     return True
 
 class ProcessLock:
@@ -194,7 +254,7 @@ class TicketExecutor:
                 'related_tickets':job.get('related_tickets',[]),'branch':branch},ensure_ascii=False)
             cmd=[binary,'--no-daemon','exec','--ignore-user-config','--ignore-rules','--strict-config',
                  '--json','--output-schema',str(folder/'schema.json'),'--output-last-message',str(folder/'report.json'),
-                 '-C',str(work),*policy(work,scratch,common),'-']
+                 '-C',str(work),*policy(work,scratch,common,runtime_binary=binary),'-']
             self.log=(folder/'events.jsonl').open('wb');os.chmod(folder/'events.jsonl',0o600)
             if not self.gateway.rpc('worker_development_pulse',{'p_id':job['id'],'p_lease':job['lease'],'p_phase':'Préparation vérifiée ; démarrage Codex'}):
                 raise ExecutionError('Demande annulée ou accès retiré pendant la préparation')

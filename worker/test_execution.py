@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import tomllib
 import unittest
 from unittest.mock import Mock, patch
 from ticket_executor import TicketExecutor, ProcessLock, ExecutionError, add_repository, read_registry, clean_env, policy, private_json
@@ -95,7 +96,8 @@ print(json.dumps({'type':'turn.completed'}))
         self.assertNotIn('ATELIER_WORKER_PASSWORD',env);self.assertNotIn('OPENAI_API_KEY',env);self.assertNotIn('SSH_AUTH_SOCK',env)
         flags=policy(self.repo,self.root/'scratch')
         self.assertIn('permissions.atelier.network.enabled=false',flags)
-        self.assertIn('permissions.atelier.filesystem.":root"="deny"',flags)
+        parsed=tomllib.loads('\n'.join(flags[1::2]))
+        self.assertEqual(parsed['permissions']['atelier']['filesystem'][':root'],'deny')
         self.assertNotIn('--sandbox',flags)
     def test_cancellation_stops_session_and_never_delivers_result(self):
         self.start();self.gateway.rpc.return_value=False;self.runner.last_pulse-=11

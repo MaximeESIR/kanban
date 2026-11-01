@@ -65,3 +65,29 @@ Sans projet Supabase et sans moteur installé/configuré sur le PC, nous ne pouv
 - Suppression de la modification manuelle du workflow pour activer Supabase : la présence des deux variables désactive déjà la démo. Vérification des libellés de l’application et des sources officielles Supabase/Codex, contrôle des liens locaux et du rendu Markdown. Aucun changement du fonctionnement de l’application.
 
 - Correction après la capture de SQL Editor : création du projet reconnue comme faite, étape 2 ouverte par défaut, premier fichier avec lien texte direct et chemin local absolu, emplacement exact de Run/Results, commandes PC absolues. Ancienne section technique déplacée dans `docs/REFERENCE-PC.md` et suppression de sa procédure Supabase en doublon.
+
+## 1er novembre 2026 — premiers contrôles du projet Supabase réel
+
+- Deux comptes Auth créés et confirmés d’après les fiches transmises. URL et clé publique reçues : réponses HTTP 200 des points d’accès Auth `health` et `settings`. Les inscriptions publiques et les connexions anonymes sont désactivées ; le fournisseur e-mail est actif.
+- Requêtes avec la seule clé publique, sans session utilisateur : lecture de `projects`, `notes` et `development_runs` refusée (HTTP 401, code PostgreSQL 42501). Ce contrôle limité ne valide pas encore les droits après connexion, le MFA ni le parcours complet.
+- URL, clé publique et adresse du compte PC renseignées dans le fichier privé existant, permissions 0600 vérifiées. Mot de passe inchangé, encore à saisir localement par le propriétaire. Aucune valeur de configuration ajoutée au dépôt.
+- Guide corrigé à partir des captures : Connect → Framework → Add files → `.env.local`, copie de la valeur après `=`, correspondance entre les noms `NEXT_PUBLIC_` affichés et les variables `VITE_` attendues dans GitHub. Étape 4 ouverte ; étape 5 réduite à la saisie du mot de passe PC.
+- Le connecteur GitHub disponible ne permet pas de créer les variables Actions : leur saisie reste à effectuer depuis les réglages du dépôt, puis la publication doit être relancée. Connexion authentifiée à l’application et au worker encore non vérifiée.
+
+## 1er novembre 2026 — publication Supabase et ancienne démo encore affichée
+
+- Publication manuelle GitHub Actions `41304524452` terminée avec succès. Le JavaScript servi par Pages contient bien l’URL et la clé publique attendues.
+- Vérification dans deux contextes Chrome neufs, ordinateur et mobile : écran « BIENVENUE CHEZ VOUS », bouton de connexion personnel, absence d’« ACCÈS TEMPORAIRE », aucune erreur JavaScript. Captures locales `artifacts/live-supabase-login-desktop.png` et `artifacts/live-supabase-login-mobile.png`.
+- Le service worker conserve la version active jusqu’à fermeture des onglets qui l’utilisent. Cela explique probablement l’ancienne démo signalée par le propriétaire ; son navigateur personnel n’a pas pu être inspecté. Guide précisé : fermer tous les onglets/PWA, rouvrir l’URL exacte et, si nécessaire, vérifier en navigation privée sans effacer les données.
+- Aucun mot de passe demandé ni testé. La réussite d’une connexion personnelle et du MFA reste à confirmer par le propriétaire.
+
+## 1er novembre 2026 — connexion personnelle confirmée et diagnostic PC corrigé
+
+- Le propriétaire confirme sa connexion personnelle et la validation TOTP, puis renseigne le fichier privé du PC. Vérification réelle avec ce fichier, sans afficher ses valeurs : authentification du compte PC, autorisation `worker_heartbeat`, capacités résumé/réécriture/recherche/dictée et abonnement Realtime réussis.
+- Diagnostic initial trompeur corrigé : les segments entre guillemets des clés CLI étaient traités comme des clés littérales ou séparés sur les points. Remplacement par des tables TOML complètes pour les chemins, projets et MCP ; table MCP vide, configuration de projet non fiable conservée.
+- Un PATH explicite et limité permet au helper Codex de trouver le bubblewrap Ubuntu. Le binaire standalone installé sous `.codex` est copié à l’identique, vérification SHA-256, dans un cache privé hors de ce dossier ; les commandes n’obtiennent aucun accès aux identifiants `.codex`.
+- Le contrôle réseau accepte maintenant le refus de création de socket comme un blocage effectif, en plus du refus de connexion. Ajout du contrôle d’un `.env` témoin. Erreurs de diagnostic catégorisées sans recopier la sortie brute ni les valeurs privées ; plus de boucle invitant `doctor` à se relancer lui-même.
+- Validation : **29 tests Python réussis**, dont six nouvelles régressions ; diagnostic réel Codex 0.166.0 réussi (écriture autorisée, fichiers privés/`.env` et métadonnées Git protégés, réseau bloqué). Aucun modèle Codex lancé par ces vérifications.
+- Différence terminal/service reproduite : les protections de montage d’un service utilisateur systemd 255 déclenchent le profil AppArmor `unprivileged_userns`, qui bloque ici le sandbox imbriqué. Le contrôle direct et une sonde temporaire sans ces montages réussissent ; l’ancien service de production reste arrêté, ses protections ne sont pas retirées.
+- Préparation d’un service système exécuté explicitement avec l’UID/GID utilisateur, conservant `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`, `ProtectHome=read-only` et les chemins d’écriture limités. `AF_NETLINK` nécessaire à bubblewrap vérifié par deux sondes comparatives. Contrôle `doctor` obligatoire avant démarrage. Syntaxe du script de connexion et unité générée vérifiées.
+- Reste une action administrateur : `bash /home/mblaret/Documents/kanban/worker/connect_pc.sh`. Le script demande sudo uniquement pour installer/démarrer l’unité ; le worker reste non privilégié. Son premier démarrage dans cette unité, la dictée mobile et une tâche Codex réelle restent à confirmer.

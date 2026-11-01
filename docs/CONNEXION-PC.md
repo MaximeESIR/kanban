@@ -1,6 +1,6 @@
 # Maxime : ce que tu dois faire, dans l’ordre
 
-**Ta capture montre que le projet `atelier` est créé et que SQL Editor est ouvert. Reprends à l’étape 2, déjà dépliée ci-dessous.** L’exécution du premier fichier n’est pas encore confirmée. Les autres étapes restent repliées.
+**Ta connexion personnelle et la double authentification fonctionnent. Le fichier du PC est rempli ; son compte Supabase, ses autorisations et Realtime ont été vérifiés. Reprends à l’étape 6, déjà dépliée : il reste à installer le service en arrière-plan.**
 
 **Déjà fait pour toi :** site GitHub Pages, application mobile installable, code, scripts, modèles de dictée/texte installés sur ce PC, service préparé et dépôt Atelier enregistré. **Tu n’as rien à réinstaller et aucun port de ta box à ouvrir.**
 
@@ -20,8 +20,8 @@
 
 </details>
 
-<details open>
-<summary><strong>2 — MAINTENANT : copier le premier fichier dans Supabase</strong></summary>
+<details>
+<summary><strong>2 — Installer les tables dans Supabase</strong></summary>
 
 **Où tu travailles : dans ton navigateur, sur l’écran Supabase montré dans ta capture. Aucun terminal à ouvrir pour cette étape.**
 
@@ -78,7 +78,7 @@ Fichier correspondant sur ton PC : `/home/mblaret/Documents/kanban/supabase/auth
 **Crée ensuite l’utilisateur PC :**
 
 1. Reviens dans **Authentication → Users → Add user → Create new user**.
-2. Utilise une autre adresse ou un alias que tu contrôles. Choisis un mot de passe différent ; conserve ces deux valeurs pour l’étape 5. Confirme l’utilisateur comme précédemment.
+2. Utilise une autre adresse ou un alias que tu contrôles. Une adresse fictive comme `atelier-pc@example.com` convient aussi pour ce compte technique, avec **Auto Confirm User** activé ; elle ne recevra pas de mail de récupération. Choisis un mot de passe différent ; conserve ces deux valeurs pour l’étape 5. Confirme l’utilisateur comme précédemment.
 3. Copie son **User UID / ID**.
 4. Ouvre [le texte de authorize-worker.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/authorize-worker.sql) et copie son contenu dans une nouvelle requête SQL.
 5. Remplace `WORKER_AUTH_UUID` par l’identifiant du **PC**, puis `HUMAN_OWNER_AUTH_UUID` par **ton** identifiant. Conserve les apostrophes. Clique **Run**.
@@ -90,7 +90,7 @@ Fichier correspondant sur ton PC : `/home/mblaret/Documents/kanban/supabase/auth
 </details>
 
 <details>
-<summary><strong>4 — TOI : relier GitHub au projet et ouvrir ton espace privé</strong></summary>
+<summary><strong>4 — FAIT : relier GitHub au projet et ouvrir ton espace privé</strong></summary>
 
 Si tu as créé des notes/tickets dans la démo, ouvre d’abord [Atelier](https://maximeesir.github.io/kanban/) et clique **Exporter mes données**. La démo n’est pas transférée automatiquement.
 
@@ -99,7 +99,17 @@ Si tu as créé des notes/tickets dans la démo, ouvre d’abord [Atelier](https
 1. Va dans **Authentication → URL Configuration**.
 2. Mets **Site URL** à `https://maximeesir.github.io/kanban/`.
 3. Ajoute dans **Redirect URLs** : `https://maximeesir.github.io/kanban/?recovery=1`. Enregistre.
-4. Clique **Connect** dans ton projet et copie **Project URL** et **Publishable key**. La clé à utiliser commence par `sb_publishable_`. Si nécessaire, retrouve-la dans **Settings → API Keys**. Garde ces deux valeurs pour GitHub et l’étape 5. [Où trouver ces valeurs](https://supabase.com/docs/guides/getting-started/api-keys).
+4. Clique **Connect** dans ton projet. Dans la fenêtre **Connect to your project**, clique **Framework**, le premier rectangle en haut à gauche, avec l’icône cube et le texte **Use a client library**.
+5. Tu peux laisser **Next.js** et **App Router** sélectionnés. Descends jusqu’à **Add files**, puis regarde l’onglet **`.env.local`** dans le cadre à droite. Aucune commande d’installation à exécuter ici.
+6. Copie uniquement la valeur **après le signe `=`** sur chacune de ces deux lignes :
+
+   | Ligne affichée dans Supabase | Valeur à garder |
+   | --- | --- |
+   | `NEXT_PUBLIC_SUPABASE_URL=…` | L’adresse complète `https://…supabase.co` |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=…` | La clé complète commençant par `sb_publishable_` |
+
+   Le texte peut dépasser à droite : utilise la barre de défilement horizontale pour vérifier que tu as copié la valeur jusqu’au bout. Ne copie ni le nom avant `=`, ni le signe `=`. La ligne `postgresql://…` de l’onglet **Direct** n’est pas l’URL de l’application.
+7. Garde ces deux valeurs pour GitHub et l’étape 5. La clé publique se retrouve aussi dans **Settings → API Keys**. [Documentation Supabase](https://supabase.com/docs/guides/getting-started/api-keys).
 
 **Dans GitHub :**
 
@@ -111,6 +121,8 @@ Si tu as créé des notes/tickets dans la démo, ouvre d’abord [Atelier](https
    | `VITE_SUPABASE_URL` | Le Project URL copié dans Supabase |
    | `VITE_SUPABASE_PUBLISHABLE_KEY` | La clé `sb_publishable_…` copiée dans Supabase |
 
+   Clique **Add variable** pour enregistrer la première, puis **New repository variable** pour créer la seconde. Les noms dans GitHub commencent bien par **`VITE_`**, même si l’exemple Supabase affiche `NEXT_PUBLIC_`.
+
 3. Ouvre [le workflow de publication](https://github.com/MaximeESIR/kanban/actions/workflows/deploy.yml).
 4. Clique **Run workflow**, choisis la branche **main**, puis confirme **Run workflow**.
 5. Attends que **verify**, **build** et **deploy** soient verts.
@@ -119,9 +131,10 @@ Si tu as créé des notes/tickets dans la démo, ouvre d’abord [Atelier](https
 
 **Dans Atelier :**
 
-1. Ouvre [l’application](https://maximeesir.github.io/kanban/) et connecte-toi avec **ton utilisateur de l’étape 3**, pas avec `k@k.k`.
-2. Clique **Configurer la double authentification**. Scanne le QR code avec ton application d’authentification sur téléphone.
-3. Saisis son **code à six chiffres**, puis clique **Vérifier**. Conserve une sauvegarde de cette application d’authentification.
+1. Ferme **tous les onglets Atelier**, ainsi que l’application Atelier installée si elle est ouverte. Rouvre ensuite [l’application](https://maximeesir.github.io/kanban/). Tu dois lire **BIENVENUE CHEZ VOUS**, sans le bloc **ACCÈS TEMPORAIRE**. Si ce bloc reste affiché, ouvre une fenêtre de navigation privée (**Ctrl + Maj + N** dans Chrome), puis ouvre le même lien pour vérifier sans l’ancienne version en cache. Ne réinitialise pas les données de la démo.
+2. Connecte-toi avec **ton utilisateur de l’étape 3**, pas avec `k@k.k`. Utilise le mot de passe que tu as défini pour cet utilisateur dans Supabase ; il ne s’agit pas automatiquement du mot de passe de ta boîte Gmail.
+3. Clique **Configurer la double authentification**. Scanne le QR code avec ton application d’authentification sur téléphone.
+4. Saisis son **code à six chiffres**, puis clique **Vérifier**. Conserve une sauvegarde de cette application d’authentification.
 
 **C’est bon quand :** tu vois tes projets après cette connexion. **Tu peux t’arrêter là pour utiliser le site privé** ; la partie PC vient ensuite. Si l’ancienne démo apparaît encore, ferme tous les onglets et la PWA Atelier, puis rouvre le site pour activer la mise à jour.
 
@@ -136,7 +149,9 @@ Sur **ton PC Ubuntu**, ouvre un terminal avec **Ctrl + Alt + T**, puis lance :
 nano /home/mblaret/.config/atelier/worker.env
 ```
 
-Ce fichier existe déjà. Remplis uniquement les quatre lignes suivantes avec les valeurs des étapes précédentes, après le signe `=` :
+**Sur ton PC, l’URL, la clé publique et l’adresse du compte PC ont déjà été renseignées. Il te reste uniquement à remplir `ATELIER_WORKER_PASSWORD=` avec le mot de passe de ce compte PC.** Ne le colle pas dans la conversation.
+
+Voici les quatre lignes concernées, pour les reconnaître dans le fichier :
 
 | Ligne | Ce que tu dois y mettre |
 | --- | --- |
@@ -155,44 +170,29 @@ Enregistre avec **Ctrl + O**, puis **Entrée** ; quitte avec **Ctrl + X**. Garde
 
 </details>
 
-<details>
-<summary><strong>6 — TOI : autoriser l’isolation Ubuntu, puis démarrer le PC</strong></summary>
+<details open>
+<summary><strong>6 — MAINTENANT : démarrer le programme du PC</strong></summary>
 
-**Cette étape demande ton mot de passe administrateur Ubuntu.** Il sert à autoriser le mécanisme de protection de Codex. Je n’ai pas pu réaliser cette action avec les droits disponibles.
+**Déjà fait :** profil Ubuntu installé, fichier privé rempli, diagnostic `doctor` réussi et connexion du compte PC à Supabase vérifiée. Tu n’as pas à refaire les commandes précédentes.
 
-Dans le terminal du PC, exécute ces commandes **une par une**. Quand `sudo` demande ton mot de passe, rien ne s’affiche pendant la saisie : c’est normal.
+Le service utilisateur Ubuntu empêchait Codex de créer son isolation. Une unité système a été préparée pour conserver les protections de fichiers ; **le programme continuera à s’exécuter avec ton compte habituel, jamais comme administrateur**.
 
-```bash
-sudo apt install apparmor-profiles apparmor-utils
-ls /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
-```
-
-**Si `ls` dit que le fichier n’existe pas, arrête-toi et donne-moi ce message.** Sinon, continue :
+Dans le terminal de ton PC, copie cette seule commande puis appuie sur **Entrée** :
 
 ```bash
-sudo install -m 0644 /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/bwrap-userns-restrict
-sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
-python3 /home/mblaret/Documents/kanban/worker/ticket_executor.py doctor
+bash /home/mblaret/Documents/kanban/worker/connect_pc.sh
 ```
 
-**Si le diagnostic dit « Isolation Codex indisponible », arrête-toi et transmets-moi ce message.** On ne désactive pas cette protection pour faire fonctionner Run. Cette correction ciblée est décrite dans la [documentation du sandbox Codex](https://learn.chatgpt.com/docs/sandboxing).
+Le script refait le diagnostic, vérifie le fichier du service, demande le **mot de passe administrateur Ubuntu**, installe le service et le démarre. Rien ne s’affiche pendant la saisie du mot de passe : c’est normal. Ne communique ce mot de passe ni ici ni dans GitHub.
 
-**Si le diagnostic dit « Isolation vérifiée », démarre le service :**
+**C’est bon quand :** tu lis **active**, puis **Service Atelier démarré**. Si une erreur apparaît, transmets le message affiché. Le premier démarrage de cette unité système reste à vérifier sur ce PC.
 
-```bash
-python3 /home/mblaret/Documents/kanban/worker/install_service.py
-systemctl --user enable --now atelier-worker.service
-systemctl --user status atelier-worker.service --no-pager
-```
+Ensuite, dans Atelier :
 
-La dernière commande doit afficher **active (running)**. Attends quelques secondes, puis :
-
-1. Dans Atelier, ouvre une note → **Assistant PC** : le PC doit apparaître connecté. Fais une courte dictée pour vérifier le retour du texte.
+1. Ouvre une note → **Assistant PC** : le PC doit apparaître connecté. Fais une courte dictée pour vérifier le retour du texte.
 2. Dans un projet, ouvre **Associer un dépôt sur le PC**. Sélectionne **Atelier** ; vérifie le chemin `/home/mblaret/Documents/kanban`.
-3. Si tu veux travailler dans un **autre dépôt**, donne-moi son chemin exact avant de lancer ses tickets : il faudra l’enregistrer sur le PC.
-4. Le premier test réel de **Run** reste à vérifier ensemble sur un ticket de test précis. Ne lance pas un ticket quelconque uniquement pour essayer : Run autorise réellement Codex à modifier sa copie de travail.
-
-**C’est bon quand :** le service tourne, le PC est connecté et une dictée revient dans l’application. La validation d’une vraie tâche Codex est la dernière vérification à faire ensemble.
+3. Pour un autre dépôt, donne-moi son chemin exact : il faudra l’enregistrer sur le PC et mettre à jour le service.
+4. Le premier ticket Codex réel sera testé ensemble ; son exécution et la dictée depuis le téléphone restent à vérifier de bout en bout.
 
 </details>
 
