@@ -14,16 +14,25 @@ import {
 import { supabase, friendlyError } from '../lib/supabase'
 import { RichText } from './RichText'
 import { recentlySeen } from '../lib/serverClock'
+import {
+  assistantReady,
+  parseAssistantSettings,
+  type AssistantSettings,
+} from '../lib/assistantSettings'
+import { AssistantEngineChoice } from './AssistantEngineChoice'
 export function usePC(enabled: boolean) {
   const [pcs, setPCs] = useState<PC[]>([]),
     [jobs, setJobs] = useState<AIJob[]>([]),
-    [error, setError] = useState('')
+    [error, setError] = useState(''),
+    [settings, setSettings] = useState<AssistantSettings | null>(null),
+    [settingsError, setSettingsError] = useState(''),
+    [legacy, setLegacy] = useState(false)
   useEffect(() => {
     if (!enabled || !supabase) return
     let live = true,
       inflight = false,
       again = false
-    const poll = async () => {
+    const poll = async (readJobs = true) => {
       if (!navigator.onLine) return
       if (inflight) {
         again = true
@@ -31,24 +40,48 @@ export function usePC(enabled: boolean) {
       }
       inflight = true
       try {
-        const [p, j] = await Promise.all([
+        const [p, selection] = await Promise.all([
           supabase!.rpc('pc_status'),
-          supabase!
-            .from('ai_jobs')
-            .select('id,kind,status,result,error,created_at,context')
-            .order('created_at', { ascending: false })
-            .limit(20),
+          supabase!.rpc('assistant_settings'),
         ])
         if (p.error) throw p.error
-        if (j.error) throw j.error
+        const missing = Boolean(
+          selection.error &&
+          (['PGRST202', '42883'].includes(selection.error.code) || selection.status === 404),
+        )
+        let current: AssistantSettings | null = null
+        let selectionError = ''
+        if (!missing) {
+          try {
+            if (selection.error) throw selection.error
+            current = parseAssistantSettings(selection.data)
+          } catch {
+            selectionError = 'Le choix du moteur est indisponible. Réessayez après reconnexion.'
+          }
+        }
+        const j = readJobs
+          ? await supabase!
+              .from('ai_jobs')
+              .select(
+                'id,kind,status,result,error,created_at,context' + (current ? ',provider' : ''),
+              )
+              .order('created_at', { ascending: false })
+              .limit(20)
+          : null
+        if (j?.error) throw j.error
         if (live) {
           setPCs(p.data || [])
-          setJobs(j.data as AIJob[])
+          if (j) setJobs(j.data as unknown as AIJob[])
+          setSettings(current)
+          setSettingsError(selectionError)
+          setLegacy(missing)
           setError('')
         }
       } catch {
         if (live) {
           setPCs([])
+          setSettings(null)
+          setLegacy(false)
           setError('Liaison PC non configurée ou inaccessible.')
         }
       } finally {
@@ -60,11 +93,7 @@ export function usePC(enabled: boolean) {
       }
     }
     void poll()
-    const timer = setInterval(async () => {
-      if (!navigator.onLine) return
-      const p = await supabase!.rpc('pc_status')
-      if (live) setPCs(p.error ? [] : p.data || [])
-    }, 15000)
+    const timer = setInterval(() => void poll(false), 15000)
     const refresh = () => void poll()
     window.addEventListener('atelier-pc-refresh', refresh)
     window.addEventListener('online', refresh)
@@ -77,12 +106,15 @@ export function usePC(enabled: boolean) {
       window.removeEventListener('focus', refresh)
     }
   }, [enabled])
-  return { pcs, jobs, error }
+  return { pcs, jobs, error, settings, settingsError, legacy }
 }
-const PCContext = createContext<{ pcs: PC[]; jobs: AIJob[]; error: string }>({
+const PCContext = createContext<ReturnType<typeof usePC>>({
   pcs: [],
   jobs: [],
   error: '',
+  settings: null,
+  settingsError: '',
+  legacy: false,
 })
 export function AssistantProvider({
   enabled,
@@ -114,7 +146,14 @@ export function Assistant({
   searchDocs?: { id: string; title: string; content: string }[]
   onOpen?: (id: string) => void
 }) {
-  const { pcs, jobs, error: connectionError } = useContext(PCContext)
+  const {
+    pcs,
+    jobs,
+    error: connectionError,
+    settings,
+    settingsError,
+    legacy,
+  } = useContext(PCContext)
   const [open, setOpen] = useState(false),
     [prompt, setPrompt] = useState(''),
     [id, setId] = useState(''),
@@ -128,6 +167,7 @@ export function Assistant({
     cancelled = useRef(false),
     before = useRef(''),
     after = useRef('')
+  const engineReady = legacy || Boolean(settings && assistantReady(settings))
   const job = jobs.find((x) => x.id === id),
     running =
       busy ||
@@ -150,10 +190,14 @@ export function Assistant({
     before.current = text || ''
     try {
       setId(
-        await submit(kind, {
-          ...input,
-          context: { target: targetId, hash: await textHash(text || '') },
-        }),
+        await submit(
+          kind,
+          {
+            ...input,
+            context: { target: targetId, hash: await textHash(text || '') },
+          },
+          settings?.provider,
+        ),
       )
       window.dispatchEvent(new Event('atelier-pc-refresh'))
     } catch (e) {
@@ -169,7 +213,8 @@ export function Assistant({
       return
     }
     try {
-      if (!available(pcs, 'transcribe')) throw new Error('PC indisponible pour la dictée.')
+      if (!engineReady || !available(pcs, 'transcribe'))
+        throw new Error('PC indisponible pour la dictée.')
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined')
         throw new Error('Le microphone n’est pas disponible dans ce navigateur.')
       cancelled.current = false
@@ -214,7 +259,7 @@ export function Assistant({
     }
   }
   const can = (kind: JobKind) =>
-    enabled && navigator.onLine && available(pcs, kind) && !running && !recording
+    enabled && navigator.onLine && engineReady && available(pcs, kind) && !running && !recording
   return (
     <div className="assistant-box">
       <button className="text-button" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -233,9 +278,23 @@ export function Assistant({
           ) : (
             <p>
               {pcs.length
-                ? 'Traitements locaux sur votre PC, sans API payante.'
+                ? settings?.provider === 'groq'
+                  ? 'Traitements Groq via votre PC : le PC doit rester allumé.'
+                  : 'Traitements locaux sur votre PC, sans API payante.'
                 : 'Associez le service PC en suivant le guide de configuration.'}
             </p>
+          )}
+          {enabled && !connectionError && (
+            <AssistantEngineChoice
+              settings={settings}
+              legacy={legacy}
+              error={settingsError}
+              disabled={
+                busy ||
+                recording ||
+                jobs.some((j) => j.status === 'queued' || j.status === 'running')
+              }
+            />
           )}
           <label className="field">
             {searchDocs ? 'Votre recherche' : 'Instructions personnalisées'}
@@ -307,7 +366,10 @@ export function Assistant({
               {
                 {
                   queued: 'En attente du PC…',
-                  running: 'Traitement sur le PC…',
+                  running:
+                    job.provider === 'groq'
+                      ? 'Traitement par Groq via le PC…'
+                      : 'Traitement sur le PC…',
                   done: 'Résultat prêt à vérifier',
                   failed: 'Le traitement a échoué',
                   cancelled: 'Demande annulée',
@@ -380,7 +442,8 @@ export function Assistant({
                   setApplied(false)
                 }}
               >
-                {j.kind} · {j.status} · {new Date(j.created_at).toLocaleString('fr-FR')}
+                {j.kind} · {j.provider === 'groq' ? 'Groq' : 'Local'} · {j.status} ·{' '}
+                {new Date(j.created_at).toLocaleString('fr-FR')}
               </button>
             ))}
           </details>

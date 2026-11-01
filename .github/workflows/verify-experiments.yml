@@ -1,0 +1,33 @@
+name: Verify experimental branches
+on:
+  push:
+    branches: ['experiment/**']
+permissions:
+  contents: read
+concurrency:
+  group: experiment-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      VITE_PUBLIC_DEMO: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:worker
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npx playwright test -c playwright.connected.config.ts
+      - run: npm run build
+      - run: npx playwright test -c playwright.production.config.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: experiment-test-failures
+          path: artifacts/

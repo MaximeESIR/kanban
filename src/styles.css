@@ -3708,3 +3708,19 @@ svg {
 .ticket-execution p {
   margin: 4px 0;
 }
+
+.assistant-engine {
+  padding: 12px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #d6dfd6;
+}
+.assistant-engine .field {
+  margin: 0;
+}
+.assistant-engine select {
+  width: 100%;
+  max-width: 420px;
+}
+.assistant-engine-status p {
+  font-weight: 600;
+}

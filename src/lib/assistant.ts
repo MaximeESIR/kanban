@@ -1,10 +1,12 @@
 import { supabase } from './supabase'
 import { recentlySeen, serverNow } from './serverClock'
+import type { AssistantEngine } from './assistantSettings'
 export type JobKind = 'summarize' | 'rewrite' | 'transcribe' | 'search'
 export type AIJob = {
   context?: { target?: string; hash?: string }
   id: string
   kind: JobKind
+  provider?: AssistantEngine
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
   result: { text?: string; matches?: { id: string; reason: string }[] } | null
   error: string | null
@@ -14,10 +16,19 @@ export type PC = { label: string; capabilities: JobKind[]; last_seen: string | n
 export function available(pcs: PC[], kind: JobKind, now = serverNow()) {
   return pcs.some((p) => recentlySeen(p.last_seen, now) && p.capabilities.includes(kind))
 }
-export async function submit(kind: JobKind, input: Record<string, unknown>) {
+export async function submit(
+  kind: JobKind,
+  input: Record<string, unknown>,
+  provider?: AssistantEngine,
+) {
   if (!supabase || !navigator.onLine) throw new Error('Connexion sécurisée et réseau nécessaires.')
   const id = crypto.randomUUID()
-  const { error } = await supabase.rpc('submit_job', { p_id: id, p_kind: kind, p_input: input })
+  const { error } = await supabase.rpc('submit_job', {
+    p_id: id,
+    p_kind: kind,
+    p_input: input,
+    ...(provider ? { p_provider: provider } : {}),
+  })
   if (error) throw error
   return id
 }

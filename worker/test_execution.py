@@ -126,9 +126,10 @@ print(json.dumps({'type':'turn.completed'}))
         self.registry.chmod(0o644)
         with self.assertRaises(ExecutionError):read_registry(self.registry)
     def test_no_service_secrets_in_child_env_or_network_access_policy(self):
-        with patch.dict(os.environ,{'ATELIER_WORKER_PASSWORD':'secret','OPENAI_API_KEY':'secret','SSH_AUTH_SOCK':'secret'}):
+        with patch.dict(os.environ,{'ATELIER_WORKER_PASSWORD':'secret','ATELIER_GROQ_API_KEY':'secret','OPENAI_API_KEY':'secret','SSH_AUTH_SOCK':'secret'}):
             env=clean_env()
         self.assertNotIn('ATELIER_WORKER_PASSWORD',env);self.assertNotIn('OPENAI_API_KEY',env);self.assertNotIn('SSH_AUTH_SOCK',env)
+        self.assertNotIn('ATELIER_GROQ_API_KEY',env)
         flags=policy(self.repo,self.root/'scratch')
         self.assertIn('permissions.atelier.network.enabled=false',flags)
         parsed=tomllib.loads('\n'.join(flags[1::2]))

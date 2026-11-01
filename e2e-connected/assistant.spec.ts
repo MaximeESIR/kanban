@@ -82,7 +82,14 @@ for (const kind of ['rewrite', 'transcribe'] as const)
       else if (p.includes('/auth/v1/user')) data = user
       else if (p.endsWith('/rpc/can_access_atelier')) data = true
       else if (p.endsWith('/rpc/atelier_schema_version')) data = 5
-      else if (p.endsWith('/rpc/pc_status'))
+      else if (p.endsWith('/rpc/assistant_settings')) {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'PGRST202', message: 'Function not found' }),
+        })
+        return
+      } else if (p.endsWith('/rpc/pc_status'))
         data = [
           {
             label: 'PC de test',
@@ -156,6 +163,10 @@ for (const kind of ['rewrite', 'transcribe'] as const)
       timeout: 10000,
     })
     expect(submitted.p_kind).toBe(kind)
+    expect(submitted).not.toHaveProperty('p_provider')
+    await expect(
+      page.getByText('Mode local. Le choix Groq nécessite', { exact: false }),
+    ).toBeVisible()
     if (kind === 'rewrite') expect(submitted.p_input.text).toBe('Texte original')
     else {
       expect(submitted.p_input.mime).toBe('audio/webm')

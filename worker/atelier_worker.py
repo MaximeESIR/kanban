@@ -9,6 +9,7 @@ import tempfile
 import time
 from urllib.parse import urlparse
 from urllib.request import Request, build_opener, HTTPRedirectHandler
+from groq_provider import GroqProvider, GroqError, is_configured
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
@@ -79,25 +80,37 @@ def process_job(job, chat, transcribe):
         return {'matches':matches, 'text': 'Aucun résultat pertinent.' if not matches else ''}
     raise ValueError('Unsupported operation')
 
-def execute(job, pipe):
+def execute(job, pipe, expected_provider='local'):
     try:
-        endpoint = local_url(os.environ.get('ATELIER_OLLAMA_URL', 'http://127.0.0.1:11434'))
-        model = os.environ.get('ATELIER_MODEL', '')
-        def chat(system, user):
-            if not model: raise ValueError('No local model configured')
-            r=request(endpoint+'/api/chat', {'model':model, 'stream':False, **({'think':False} if os.environ.get('ATELIER_THINK')=='false' else {}), 'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'options':{'num_ctx':int(os.environ.get('ATELIER_CONTEXT','8192'))}}, timeout=220)
-            text=r['message']['content']
-            if not isinstance(text,str) or not text.strip() or len(text)>200000: raise ValueError('Invalid model output')
-            return text
-        def transcribe(path):
-            from faster_whisper import WhisperModel
-            model=WhisperModel(os.environ['ATELIER_WHISPER_MODEL'],device=os.environ.get('ATELIER_WHISPER_DEVICE','cpu'),compute_type=os.environ.get('ATELIER_WHISPER_COMPUTE','int8'),local_files_only=True)
-            segments,_=model.transcribe(path,language='fr',vad_filter=True,initial_prompt=os.environ.get('ATELIER_DICTATION_VOCABULARY') or None)
-            return ' '.join(s.text.strip() for s in segments)
+        provider = job.get('provider', 'local')
+        if provider not in ('local', 'groq') or provider != expected_provider:
+            pipe.send((None, 'Le fournisseur de cette demande ne correspond plus au mode validé. Aucun traitement lancé.'))
+            return
+        if provider == 'groq':
+            engine = GroqProvider()
+            def chat(system, user):
+                return engine.chat(system, user, json_output=job['kind'] == 'search')
+            transcribe = engine.transcribe
+        else:
+            def chat(system, user):
+                endpoint = local_url(os.environ.get('ATELIER_OLLAMA_URL', 'http://127.0.0.1:11434'))
+                model = os.environ.get('ATELIER_MODEL', '')
+                if not model: raise ValueError('No local model configured')
+                r=request(endpoint+'/api/chat', {'model':model, 'stream':False, **({'think':False} if os.environ.get('ATELIER_THINK')=='false' else {}), 'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'options':{'num_ctx':int(os.environ.get('ATELIER_CONTEXT','8192'))}}, timeout=220)
+                text=r['message']['content']
+                if not isinstance(text,str) or not text.strip() or len(text)>200000: raise ValueError('Invalid model output')
+                return text
+            def transcribe(path):
+                from faster_whisper import WhisperModel
+                model=WhisperModel(os.environ['ATELIER_WHISPER_MODEL'],device=os.environ.get('ATELIER_WHISPER_DEVICE','cpu'),compute_type=os.environ.get('ATELIER_WHISPER_COMPUTE','int8'),local_files_only=True)
+                segments,_=model.transcribe(path,language='fr',vad_filter=True,initial_prompt=os.environ.get('ATELIER_DICTATION_VOCABULARY') or None)
+                return ' '.join(s.text.strip() for s in segments)
         pipe.send((process_job(job,chat,transcribe),None))
+    except GroqError as error:
+        pipe.send((None, str(error)))
     except Exception:
         # Do not leak model internals, account details, or note contents to logs.
-        pipe.send((None,'Le moteur local a refusé le traitement. Vérifiez sa configuration ou réduisez la demande.'))
+        pipe.send((None,'Le traitement a été refusé. Vérifiez le moteur choisi ou réduisez la demande.'))
     finally: pipe.close()
 
 class Gateway:
@@ -118,7 +131,10 @@ class Gateway:
         self.auth()
         return request(self.url+'/rest/v1/rpc/'+name,data,{'apikey':self.key,'Authorization':'Bearer '+self.token})
 
-def capabilities():
+def capabilities(provider='local'):
+    if provider == 'groq':
+        return ['summarize','rewrite','search','transcribe'] if is_configured() else []
+    if provider != 'local': return []
     caps=[]
     try:
         endpoint=local_url(os.environ.get('ATELIER_OLLAMA_URL','http://127.0.0.1:11434'))
@@ -130,19 +146,31 @@ def capabilities():
         if importlib.util.find_spec('faster_whisper') and Path(os.environ['ATELIER_WHISPER_MODEL']).is_dir():caps.append('transcribe')
     return caps
 
+def unload_local_models():
+    from assistant_settings import release_ollama_model
+    endpoint = local_url(os.environ.get('ATELIER_OLLAMA_URL', 'http://127.0.0.1:11434'))
+    return release_ollama_model(request, endpoint, os.environ.get('ATELIER_MODEL', ''))
+
 def poll_seconds():
     value = float(os.environ.get('ATELIER_POLL_SECONDS', '2'))
     if not 1 <= value <= 30: raise ValueError('ATELIER_POLL_SECONDS must be between 1 and 30')
     return value
 
 class Runner:
-    def __init__(self, gateway, ctx):
+    def __init__(self, gateway, ctx, settings=None):
         self.gateway=gateway; self.ctx=ctx; self.child=None; self.receiver=None; self.job=None
         self.started=0; self.completed=None; self.last_heartbeat=0
         self.caps=[]; self.caps_at=float('-inf'); self.interval=poll_seconds()
+        self.settings=settings; self.caps_provider=None
+    def invalidate_capabilities(self):
+        self.caps=[]; self.caps_at=float('-inf'); self.caps_provider=None
     def current_capabilities(self):
-        if time.monotonic()-self.caps_at>=30:
-            self.caps=capabilities(); self.caps_at=time.monotonic()
+        if self.settings and not self.settings.ready:return []
+        if self.settings and self.settings.supported is True:
+            return list(self.settings.capabilities)
+        provider=self.settings.provider if self.settings else 'local'
+        if self.caps_provider!=provider or time.monotonic()-self.caps_at>=30:
+            self.caps=capabilities(provider); self.caps_at=time.monotonic(); self.caps_provider=provider
         return self.caps
     def cleanup(self):
         if self.child and self.child.pid is not None:
@@ -169,12 +197,15 @@ class Runner:
                 self.gateway.rpc('worker_heartbeat',{'p_capabilities':self.current_capabilities()})
                 self.last_heartbeat=time.monotonic()
             return 0.25
-        if not allow_claim: return self.interval
-        result=self.gateway.rpc('worker_poll',{'p_capabilities':self.current_capabilities()})
+        if not allow_claim or (self.settings and not self.settings.ready): return self.interval
+        caps=self.current_capabilities()
+        arguments=self.settings.claim_arguments(caps) if self.settings else {'p_capabilities':caps}
+        result=self.gateway.rpc('worker_poll',arguments)
         self.last_heartbeat=time.monotonic()
         if result:
             self.job=result; self.receiver,sender=self.ctx.Pipe(duplex=False)
-            self.child=self.ctx.Process(target=execute,args=(self.job,sender))
+            provider=self.settings.provider if self.settings else 'local'
+            self.child=self.ctx.Process(target=execute,args=(self.job,sender,provider))
             self.child.start();sender.close();self.started=time.monotonic()
             print('Traitement démarré : '+self.job['kind'],flush=True)
             return 0.25

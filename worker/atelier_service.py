@@ -4,7 +4,8 @@ import signal
 import threading
 import time
 from pathlib import Path
-from atelier_worker import Gateway, Runner
+from atelier_worker import Gateway, Runner, capabilities, unload_local_models
+from assistant_settings import AssistantSettings
 from realtime_events import RealtimeEvents
 from repository_paths import RepositoryRequests
 from ticket_executor import TicketExecutor, ProcessLock, ExecutionError, read_registry, preflight, STATE, available_models
@@ -13,7 +14,9 @@ def main():
     lock=ProcessLock(STATE/'service.lock')
     wake=threading.Event();stop=threading.Event()
     for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda *_:stop.set())
-    gateway=Gateway();ai=Runner(gateway,mp.get_context('spawn'));code=TicketExecutor(gateway)
+    gateway=Gateway()
+    assistant=AssistantSettings(gateway,lambda: capabilities('local'),unload_local_models)
+    ai=Runner(gateway,mp.get_context('spawn'),settings=assistant);code=TicketExecutor(gateway)
     events=RealtimeEvents(Gateway,wake)
     repositories=RepositoryRequests(gateway)
     ready=False
@@ -32,6 +35,12 @@ def main():
                 notified=wake.is_set()
                 if notified:wake.clear()
                 now=time.monotonic()
+                if events.connected.is_set() and assistant.refresh(busy=ai.child is not None,force=notified):
+                    ai.invalidate_capabilities()
+                    last_heartbeat=0
+                    if assistant.ready:
+                        # A new/reconnected profile may have queued compatible requests.
+                        notified=True
                 if events.connected.is_set() and now-last_registry>30:
                     rows=read_registry()
                     models=available_models() if ready else []
