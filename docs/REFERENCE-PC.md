@@ -10,8 +10,8 @@ Pour les actions à réaliser, utilise [le guide pas à pas](CONNEXION-PC.md). C
 | Compte privé, TOTP, synchronisation | Connexion personnelle et TOTP confirmés par le propriétaire ; synchronisation entre appareils encore à vérifier. |
 | Dictée locale | faster-whisper small installé, transcription française réellement exécutée sur le PC. |
 | Résumé, réécriture, recherche | Ollama + Qwen3.5 4B installés, trois inférences réelles réussies sur le PC. |
-| Run, suivi et validation humaine | Interface, file SQL, scripts, agent et tests disponibles. Parcours navigateur testé sur serveur simulé ; worktree, processus et rapport testés avec exécuteur simulé. |
-| Exécution réelle Codex | CLI connecté avec ChatGPT ; sandbox vérifié. Vraie correction Python par GPT‑6.1 Sol/low, tests exécutés par Codex puis revérifiés séparément, dépôt d’origine préservé. Parcours Run sur Supabase hébergé encore à vérifier après migration 006 et redémarrage du service. |
+| Run, suivi et validation humaine | Interface, file SQL, scripts, agent et tests disponibles. Parcours navigateur testé sur serveur simulé ; chemin direct, processus et rapport testés avec exécuteur simulé et véritable Codex. |
+| Exécution réelle Codex | CLI connecté avec ChatGPT ; sandbox vérifié. Vraie correction Python par GPT‑6.1 Sol/low, tests exécutés par Codex puis revérifiés séparément, puis vrai développement avec branche et commit dans le dépôt d’origine conformément au choix du propriétaire. Migration 006 confirmée active ; saisie des chemins à activer avec migration 007 et mise à jour de l’unité. |
 | Téléphone → Supabase hébergé → PC → téléphone | Compte PC, autorisation, heartbeat et abonnement Realtime vérifiés. Service système installé et actif, diagnostic d’isolation réussi au démarrage. Essai depuis le téléphone encore à faire. |
 
 Le propriétaire confirme le statut PC connecté après **Ctrl + Maj + R**, puis une recherche de notes réussie via le moteur local. La dictée depuis son microphone reste à confirmer.
@@ -57,7 +57,7 @@ Diagnostic :
 python3 worker/ticket_executor.py doctor
 ```
 
-Le contrôle réussit désormais sur ce PC. Les causes corrigées étaient les clés TOML mal encodées dans les options CLI, le PATH absent empêchant de trouver `/usr/bin/bwrap`, le binaire standalone installé dans le dossier privé `.codex`, et le refus de création de socket mal interprété par le test. Une copie identique du binaire, vérifiée par SHA-256 et accessible seulement à son propriétaire, est conservée sous `~/.local/share/atelier/executions/runtime/`. Le dossier `.codex` reste interdit aux commandes du modèle. Les tests de sandbox ne prouvent pas encore une tâche réelle avec le modèle Codex.
+Le contrôle réussit désormais sur ce PC. Les causes corrigées étaient les clés TOML mal encodées dans les options CLI, le PATH absent empêchant de trouver `/usr/bin/bwrap`, le binaire standalone installé dans le dossier privé `.codex`, et le refus de création de socket mal interprété par le test. Une copie identique du binaire, vérifiée par SHA-256 et accessible seulement à son propriétaire, est conservée sous `~/.local/share/atelier/executions/runtime/`. Le dossier `.codex` reste interdit aux commandes du modèle. Une tâche réelle avec le modèle Codex a ensuite été vérifiée ; son diagnostic ne remplace pas les tests applicatifs.
 
 La [documentation officielle Ubuntu/Codex](https://learn.chatgpt.com/docs/sandboxing) propose un profil AppArmor ciblé. Cette installation a déjà été effectuée par le propriétaire sur ce PC ; commandes de référence pour une autre installation :
 
@@ -155,17 +155,17 @@ Dans une note ou un ticket, ouvrir **Assistant PC**, toucher **Dicter**, parler,
 
 1. Enregistrer le ticket, vérifier ses prérequis et son dépôt, cliquer **Run**.
 2. Le ticket reste en attente tant que la session précédente occupe le PC. Aucun changement de dépôt ou double démarrage silencieux.
-3. À la prise en charge : **In progress**. Le service crée `atelier/UUID` et un worktree séparé depuis le **HEAD commité** du dépôt. Les modifications non commitées de votre copie habituelle ne sont pas incluses et restent intactes.
+3. À la prise en charge : **In progress**. Le service lance Codex avec `-C` sur le chemin exact du projet, sans clone, copie ni worktree. Codex crée sa branche et peut commiter ses changements. Il reçoit la consigne de préserver les modifications préexistantes et de ne jamais faire de reset destructif, clean, push ou fusion.
 4. Le rôle `atelier-ticket` lit le code, planifie, réalise, teste et produit un compte rendu court. Les scripts transmettent l’état et le résultat ; Codex ne se connecte pas à Supabase ou GitHub pour gérer le ticket.
 5. Le ticket reste **In progress — À valider**. Lire tests et limites, examiner le code local, puis **Valider et passer à Done** ou écarter le résultat. **Cette validation ne fusionne pas le code.** Aucun push/merge/déploiement automatique.
 
-Les fichiers se trouvent sous `~/.local/share/atelier/executions/UUID/` : `worktree/`, `events.jsonl`, `receipt.json`, `report.json`, `delivery.json`. Journaux privés et modifications sont conservés après échec/annulation ; les nettoyer manuellement après revue, avec `git worktree remove` pour un worktree terminé et la suppression volontaire de sa branche si approprié. Les scripts ne suppriment pas automatiquement votre travail.
+Les journaux et rapports privés se trouvent sous `~/.local/share/atelier/executions/UUID/` : `events.jsonl`, `receipt.json`, `report.json`, `delivery.json`, ainsi qu’un dossier temporaire. Le code reste dans le dépôt sélectionné. Le champ historique `worktree` du rapport contient maintenant ce chemin réel, sans création d’un autre dépôt. Une annulation arrête les processus mais ne supprime ni les fichiers déjà modifiés ni les commits.
 
 L’agent est défini dans `.codex/agents/atelier-ticket.toml`. Le service charge son rôle dans **la session unique** ; il ne lance pas une équipe. On peut aussi demander à Codex d’utiliser ce rôle lors d’une session manuelle dans le projet, mais la gestion de file/statut appartient au service.
 
 ### Choix du modèle et de l’effort
 
-Run ouvre un sélecteur avant toute soumission. Le PC lit le catalogue de son CLI via `codex debug models` (cache de cinq minutes, aucune inférence), conserve uniquement les modèles visibles et leurs efforts pris en charge, puis publie ces métadonnées avec ses dépôts. Le navigateur ne transmet aucun argument de commande libre. La migration 006 valide le couple choisi et le fige dans `development_runs` ; le worker le revérifie avant de créer un worktree. Un modèle absent n’est jamais remplacé silencieusement. Les anciennes demandes sans choix sont refusées par le nouveau worker ; l’interface affiche le besoin de mise à jour si le catalogue manque.
+Run ouvre un sélecteur avant toute soumission. Le PC lit le catalogue de son CLI via `codex debug models` (cache de cinq minutes, aucune inférence), conserve uniquement les modèles visibles et leurs efforts pris en charge, puis publie ces métadonnées avec ses dépôts. Le navigateur ne transmet aucun argument de commande libre. La migration 006 valide le couple choisi et le fige dans `development_runs` ; le worker le revérifie avant de lancer Codex. Un modèle absent n’est jamais remplacé silencieusement. Les anciennes demandes sans choix sont refusées par le nouveau worker ; l’interface affiche le besoin de mise à jour si le catalogue manque.
 
 Le lancement utilise explicitement `--model` et `-c model_reasoning_effort=…`, avec le fournisseur OpenAI. Le modèle travaille via le compte ChatGPT du PC, dans les limites de ce compte ; il ne s’agit pas du modèle Qwen local. Les commandes et fichiers restent sur le PC dans le sandbox existant. Les valeurs actuelles sont low, medium, high, xhigh et max selon le modèle. Ultra est exclu pour respecter l’absence de sous-agents. Sources : [modèles et efforts Codex](https://learn.chatgpt.com/docs/models), [configuration officielle](https://learn.chatgpt.com/docs/config-file/config-reference).
 
@@ -175,7 +175,7 @@ Les exécutables auxiliaires `codex-code-mode-host` et `codex-exec-server` de l�
 
 - AAL2/TOTP pour les humains ; compte PC distinct, accès par RPC limité aux opérations et au propriétaire associés. Les chemins et commandes du navigateur ne deviennent pas des commandes shell.
 - Run nécessite PC disponible et dépôt autorisé. Jusqu’à 20 exécutions en attente/en cours et 60 lancements/heure. Une seule active par ticket et une seule session Codex par PC. Annulation/retrait d’accès vérifiés pendant l’exécution ; bail expiré ou résultat tardif refusé. Pas de relance automatique d’une session incertaine.
-- Une perte de contact prolongée arrête la session Codex ; la copie de travail reste disponible. Un processus peut avoir déjà écrit des fichiers avant l’annulation. L’arrêt vise tout son groupe de processus, y compris les tests lancés.
+- Une perte de contact prolongée arrête la session Codex ; les modifications restent dans le dépôt choisi. Un processus peut avoir déjà écrit des fichiers avant l’annulation. L’arrêt vise tout son groupe de processus, y compris les tests lancés.
 - Le dépôt autorisé et ses métadonnées Git sont lisibles : ne pas conserver de mots de passe dans `.git/config` ni dans l’historique. Les exclusions des fichiers personnels ne peuvent pas effacer un secret déjà commité.
 - Le réseau des commandes Codex est fermé. Préparer les dépendances avant la tâche ou les tests peuvent rester bloqués. Le rapport doit le dire ; « À valider » ne signifie pas que toutes les vérifications ont réussi.
 - Texte/audio : cinq demandes actives maximum, 60/heure ; audio 90 s et 4 Mo ; traitement limité à quatre minutes. Whisper est chargé dans un processus isolé par dictée. Une dictée peut fonctionner pendant une session Codex, au prix de ressources partagées.
@@ -194,3 +194,13 @@ Les exécutables auxiliaires `codex-code-mode-host` et `codex-exec-server` de l�
 5. Sur un dépôt de test, Run un petit ticket avec tests connus : statut, branche, fichiers, compte rendu, aucun Done automatique. Valider explicitement.
 6. Lancer deux tickets dans deux projets : constater une seule session Codex. Annuler l’un, vérifier arrêt et conservation du travail. Retirer le worker et vérifier refus des actions suivantes.
 7. Vérifier que l’isolation refuse les fichiers personnels et le réseau, sans tenter de contourner le sandbox. Ne confier des dépôts sensibles qu’après ces vérifications réelles.
+
+## Saisie des chemins et accès direct (migration 007)
+
+Le propriétaire authentifié en AAL2 envoie le chemin exact et le PC concerné avec `request_repository`. La file `repository_requests` est privée et ne réplique que des notifications sans contenu. Le compte PC ne lit pas directement cette table ; claim/finish sont limités à ses demandes avec bail, annulation, quotas, idempotence et reprise des vérifications interrompues. Une association manuelle plus récente annule la demande précédente et une exécution active empêche le changement de dépôt.
+
+Le worker vérifie un chemin absolu appartenant au compte PC, refuse les liens symboliques, les dossiers privés/système et les chemins trop larges, puis enregistre le chemin dans un fichier privé sous `executions/web-repositories.json`. Un nouveau dossier nécessite l’option explicite correspondante et doit être vide ; le worker ne lance pas Git init, de commande fournie par le formulaire ou de LLM. Git est initialisé ensuite par Codex lors de Run.
+
+L’unité système utilise désormais `ProtectSystem=full`, `ProtectHome=false`, avec `NoNewPrivileges`, `PrivateTmp` et des `ReadOnlyPaths` explicites pour la configuration Atelier, SSH, l’authentification Codex et les scripts du service. Ce changement donne au récepteur de confiance les droits ordinaires de l’utilisateur sur les dossiers sélectionnés, sans reconfigurer systemd pour chaque projet. Le sandbox indépendant de Codex reste limité au dépôt exact et à son espace temporaire ; les identifiants et le code du récepteur restent interdits en écriture, le réseau des commandes reste bloqué. Git peut écrire branches, index et objets, tandis que sa configuration et ses hooks existants sont en lecture seule. L’identité d’auteur configurée est transmise, les hooks et fsmonitor sont désactivés.
+
+La mise à jour nécessite la réinstallation de l’unité par `connect_pc.sh`, qui redémarre maintenant effectivement un service déjà actif. Cette installation reste une opération administrateur du propriétaire. La demande de chemin n’autorise jamais un push, une fusion, un déploiement ou le passage automatique à Done.

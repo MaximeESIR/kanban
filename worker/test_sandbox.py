@@ -22,9 +22,9 @@ class SandboxTests(unittest.TestCase):
             self.assertEqual(config['projects'],{str(work):{'trust_level':'untrusted'}})
             fs=config['permissions']['atelier']['filesystem']
             self.assertEqual(fs[':root'],'deny')
-            self.assertEqual(fs[str(work/'.git')],'read')
+            self.assertEqual(fs[str(work/'.git')],'write')
             self.assertEqual(fs[str(work/'.env')],'deny')
-            self.assertEqual(fs[str(root/'depot.git')],'read')
+            self.assertEqual(fs[str(root/'depot.git')],'write')
             self.assertEqual(fs[str(Path.home()/'.codex')],'deny')
             self.assertEqual(fs[str(binary.resolve())],'read')
             self.assertEqual(config['shell_environment_policy']['inherit'],'none')

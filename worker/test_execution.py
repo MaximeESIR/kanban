@@ -40,12 +40,15 @@ print(json.dumps({'type':'turn.completed'}))
     def tearDown(self):self.runner.close();self.temp.cleanup()
     def start(self):
         with patch('ticket_executor.codex_binary',return_value=str(self.binary)),patch('ticket_executor.preflight',return_value=True):self.runner.start(self.job)
-    def test_real_git_worktree_process_and_report_delivery_preserve_original(self):
+    def test_real_process_works_in_the_exact_repository_without_a_secondary_copy(self):
+        (self.repo/'unrelated.txt').write_text('preexisting user change')
         self.start()
         self.runner.process.wait(timeout=10)
-        self.assertEqual((self.repo/'hello.py').read_text(),'answer = 1\n')
+        self.assertEqual((self.repo/'hello.py').read_text(),'answer = 42\n')
+        self.assertEqual((self.repo/'unrelated.txt').read_text(),'preexisting user change')
         folder=self.runner.folder
-        self.assertEqual((folder/'worktree/hello.py').read_text(),'answer = 42\n')
+        self.assertFalse((folder/'worktree').exists())
+        self.assertEqual(json.loads((folder/'receipt.json').read_text())['worktree'],str(self.repo))
         self.assertTrue(self.runner.tick())
         name,data=self.gateway.rpc.call_args.args
         self.assertEqual(name,'worker_development_finish');self.assertIsNone(data['p_error'])
@@ -63,6 +66,19 @@ print(json.dumps({'type':'turn.completed'}))
         self.assertIn('model_provider="openai"',args)
         receipt=json.loads((self.runner.folder/'receipt.json').read_text())
         self.assertEqual(receipt['reasoning_effort'],'high')
+    def test_new_folder_is_the_exact_cwd_and_git_initialization_is_left_to_codex(self):
+        empty=self.root/'New project';empty.mkdir()
+        private_json(self.registry,[{**self.row,'path':str(empty),'initialize':True}])
+        self.start();self.runner.process.wait(timeout=10)
+        args=self.runner.process.args
+        self.assertIn('--skip-git-repo-check',args)
+        self.assertEqual(args[args.index('-C')+1],str(empty))
+        self.assertFalse((empty/'.git').exists())
+        self.assertEqual((empty/'hello.py').read_text(),'answer = 42\n')
+        self.assertTrue(self.runner.tick())
+        delivery=self.gateway.rpc.call_args.args[1]
+        self.assertIsNone(delivery['p_error'])
+        self.assertNotIn('branch',delivery['p_result'])
     def test_rejects_missing_unknown_or_injected_selection_before_creating_worktree(self):
         for model,effort in [(None,None),('gpt-6.1-sol','ultra'),('gpt-6.1-sol','high; touch bad'),('--dangerously-bypass-approvals-and-sandbox','high'),('unknown','low')]:
             with self.subTest(model=model,effort=effort):
@@ -89,7 +105,7 @@ print(json.dumps({'type':'turn.completed'}))
         self.gateway.rpc.return_value=False
         with self.assertRaises(ExecutionError):self.start()
         self.assertIsNone(self.runner.process)
-        self.assertEqual((self.runner.folder/'worktree/hello.py').read_text(),'answer = 1\n')
+        self.assertEqual((self.repo/'hello.py').read_text(),'answer = 1\n')
     def test_denies_unknown_repo_and_path_override_in_job(self):
         self.job['repository_id']='different';self.job['path']=str(self.repo)
         with self.assertRaises(ExecutionError):self.start()

@@ -34,8 +34,10 @@ ATELIER_DICTATION_VOCABULARY="Atelier, Jetson, NVIDIA, inférence, ONNX, TensorR
         settings.chmod(0o600)
     # Canonical paths are inserted as systemd quoted strings, not shell source.
     def quote(p):return json.dumps(str(p).replace('%','%%'))
-    writable=[STATE,Path.home()/'.codex']
-    for row in read_registry():writable.append(Path(git(Path(row['path']),'rev-parse','--path-format=absolute','--git-common-dir')))
+    # The trusted receiver needs the user's normal access to explicitly selected
+    # repositories. Codex commands are independently restricted to the exact cwd.
+    protected=[config,root/'worker',root/'.codex']
+    protected += [p for p in (Path.home()/'.ssh',Path.home()/'.codex/auth.json') if p.exists()]
     unit=config/'atelier-worker-system.service' if args.system else Path.home()/'.config/systemd/user/atelier-worker.service'
     unit.parent.mkdir(parents=True,exist_ok=True)
     account=pwd.getpwuid(os.getuid())
@@ -57,9 +59,9 @@ RestartSec=10
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths={' '.join(quote(p) for p in writable)}
+ProtectSystem=full
+ProtectHome=false
+ReadOnlyPaths={' '.join(quote(p) for p in protected)}
 # bubblewrap needs AF_NETLINK to create its isolated loopback interface.
 # Commands remain network-blocked by the separate Codex sandbox.
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK

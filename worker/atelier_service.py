@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from atelier_worker import Gateway, Runner
 from realtime_events import RealtimeEvents
+from repository_paths import RepositoryRequests
 from ticket_executor import TicketExecutor, ProcessLock, ExecutionError, read_registry, preflight, STATE, available_models
 
 def main():
@@ -14,12 +15,13 @@ def main():
     for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda *_:stop.set())
     gateway=Gateway();ai=Runner(gateway,mp.get_context('spawn'));code=TicketExecutor(gateway)
     events=RealtimeEvents(Gateway,wake)
+    repositories=RepositoryRequests(gateway)
     ready=False
     try:
         preflight();ready=True
     except Exception:
         print('Codex désactivé : lancez worker/ticket_executor.py doctor. Dictée et notes restent disponibles.',flush=True)
-    events.start();last_heartbeat=0;last_registry=0;allowed=[]
+    events.start();last_heartbeat=0;last_registry=0;allowed=[];models=[]
     print('Atelier PC : réception événementielle sortante ; une seule session Codex à la fois.',flush=True)
     try:
         while not stop.is_set():
@@ -40,6 +42,10 @@ def main():
                 if events.connected.is_set() and now-last_heartbeat>10:
                     gateway.rpc('worker_heartbeat',{'p_capabilities':ai.current_capabilities()})
                     last_heartbeat=now
+                if (notified or repositories.due()) and events.connected.is_set() and not code.process:
+                    if repositories.tick(models,ready):
+                        last_registry=0
+                        wake.set()
                 previous=ai.child
                 if ai.child or (notified and events.connected.is_set()):
                     ai.tick(allow_claim=notified and events.connected.is_set())

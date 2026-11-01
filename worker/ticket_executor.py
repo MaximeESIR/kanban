@@ -1,4 +1,4 @@
-"""One local Codex session. Repository paths and command flags never come from a ticket."""
+"""One Codex session in the exact repository explicitly selected by the owner."""
 import argparse
 import fcntl
 import hashlib
@@ -19,6 +19,7 @@ from codex_models import ModelCatalog, validate_selection
 ROOT = Path(__file__).resolve().parent
 CONFIG = Path.home() / '.config/atelier/repositories.json'
 STATE = Path.home() / '.local/share/atelier/executions'
+REMOTE_CONFIG = STATE / 'web-repositories.json'
 MODEL_CATALOG = ModelCatalog()
 FEATURES = ('apps','plugins','remote_plugin','hooks','multi_agent','browser_use','browser_use_external',
             'browser_use_full_cdp_access','computer_use','shell_snapshot','image_generation',
@@ -51,26 +52,28 @@ def clean_env():
     env['PATH'] = '/usr/local/bin:/usr/bin:/bin'
     return env
 
-def git(repo, *args):
+def git(repo, *args, timeout=30):
     env=clean_env()
     env.update({'GIT_CONFIG_NOSYSTEM':'1','GIT_CONFIG_GLOBAL':'/dev/null','GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'})
     base=['git','-c','core.hooksPath=/dev/null','-c','core.fsmonitor=false','-c','submodule.recurse=false','-C',str(repo)]
     # Checkout filters can execute arbitrary programs before Codex starts. Disable every
     # configured driver (including included local config), not just hooks/fsmonitor.
     config=subprocess.run([*base,'config','--name-only','--get-regexp',r'^filter\..*\.(smudge|process|clean|required)$'],
-                          env=env,capture_output=True,text=True,timeout=10)
+                          env=env,capture_output=True,text=True,timeout=min(10,timeout))
     if config.returncode not in (0,1):raise ExecutionError('Configuration Git illisible')
     overrides=[]
     for name in {line.rsplit('.',1)[0] for line in config.stdout.splitlines()}:
         overrides += ['-c',name+'.process=','-c',name+'.smudge=cat','-c',name+'.clean=cat','-c',name+'.required=false']
-    r = subprocess.run([*base,*overrides,*args], env=env,capture_output=True,text=True,timeout=30)
+    r = subprocess.run([*base,*overrides,*args], env=env,capture_output=True,text=True,timeout=timeout)
     if r.returncode: raise ExecutionError('Commande Git refusée. Vérifiez le dépôt local et ses objets disponibles hors ligne.')
     return r.stdout.strip()
 
-def read_registry(path=CONFIG):
-    if not path.exists(): return []
-    if path.stat().st_mode & 0o077: raise ExecutionError('Le registre doit être privé : chmod 600 repositories.json')
-    rows = json.loads(path.read_text())
+def read_registry(path=CONFIG, include_web=True):
+    if path.is_symlink(): raise ExecutionError('Le registre ne doit pas être un lien symbolique')
+    if path.exists() and path.stat().st_mode & 0o077: raise ExecutionError('Le registre doit être privé : chmod 600 repositories.json')
+    rows = json.loads(path.read_text()) if path.exists() else []
+    if path==CONFIG and include_web:
+        rows += read_registry(REMOTE_CONFIG,include_web=False)
     if not isinstance(rows,list) or len(rows)>50: raise ExecutionError('Registre invalide')
     seen=set()
     for row in rows:
@@ -84,19 +87,38 @@ def add_repository(path, label, config=CONFIG):
     repo = Path(path).expanduser().resolve(strict=True)
     if str(repo) != git(repo,'rev-parse','--show-toplevel'): raise ExecutionError('Choisissez la racine du dépôt Git')
     if repo in (Path('/'),Path.home()) or STATE==repo or STATE.is_relative_to(repo): raise ExecutionError('Chemin trop large')
-    rows=read_registry(config)
+    rows=read_registry(config,include_web=False)
     existing=next((r for r in rows if r['path']==str(repo)),None)
     if existing: return existing
     row={'id':str(uuid.uuid4()),'label':label[:100] or repo.name,'path':str(repo)}
     rows.append(row);private_json(config,rows)
     return row
 
-def policy(worktree, scratch, common_git=None, runtime_binary=None):
+def git_identity(repo):
+    """Read only the configured author identity, never expose other Git settings."""
+    identity={}
+    for key,suffix in [('user.name','NAME'),('user.email','EMAIL')]:
+        result=subprocess.run(['git','-C',str(repo),'config','--get',key],env=clean_env(),capture_output=True,text=True,timeout=5)
+        value=result.stdout.strip() if result.returncode==0 else ''
+        if value and len(value)<=300 and not any(ord(c)<32 for c in value):
+            identity['GIT_AUTHOR_'+suffix]=value
+            identity['GIT_COMMITTER_'+suffix]=value
+    return identity
+
+def policy(worktree, scratch, common_git=None, runtime_binary=None, identity=None):
     fs={':root':'deny',':minimal':'read',':tmpdir':'deny',':slash_tmp':'deny',str(scratch):'write'}
-    # Git status/diff needs only this repository's metadata. No commits or branch changes by the model.
-    if common_git: fs[str(common_git)]='read'
-    fs[str(worktree/'.git')]='read'
+    # The owner authorizes branches and commits in this exact repository.
+    # Keep Git configuration/hooks read-only: neither operation needs to change them.
+    for metadata in {worktree/'.git',common_git} - {None}:
+        fs[str(metadata)]='read' if metadata.is_file() else 'write'
+        if metadata.is_dir():
+            fs[str(metadata/'config')]='read'
+            fs[str(metadata/'hooks')]='read'
     fs[str(worktree/'.env')]='deny'
+    # Never let an automatic ticket rewrite the trusted receiver/executor itself.
+    if ROOT.is_relative_to(worktree):
+        fs[str(ROOT)]='read'
+        fs[str(ROOT.parent/'.codex')]='read'
     # Exact deny roots remain protected even when a user registers a broad parent folder.
     fs[str(Path.home()/'.config/atelier')]='deny'
     fs[str(Path.home()/'.codex')]='deny'
@@ -113,7 +135,9 @@ def policy(worktree, scratch, common_git=None, runtime_binary=None):
         'shell_environment_policy.inherit':'none','shell_environment_policy.experimental_use_profile':False,
         # Without PATH the sandbox helper cannot locate distro bwrap and uses
         # its bundled helper, which lacks Ubuntu's /usr/bin/bwrap profile.
-        'shell_environment_policy.set':{'PATH':'/usr/local/bin:/usr/bin:/bin'},
+        'shell_environment_policy.set':{'PATH':'/usr/local/bin:/usr/bin:/bin',
+            'GIT_CONFIG_COUNT':'2','GIT_CONFIG_KEY_0':'core.hooksPath','GIT_CONFIG_VALUE_0':'/dev/null',
+            'GIT_CONFIG_KEY_1':'core.fsmonitor','GIT_CONFIG_VALUE_1':'false',**(identity or {})},
         'projects':{str(worktree):{'trust_level':'untrusted'}},
         'permissions.atelier.filesystem':fs,
         'mcp_servers':{},
@@ -184,6 +208,7 @@ def preflight(binary=None):
         script="""import pathlib,socket,sys
 w=pathlib.Path.cwd()
 (w/'allowed').write_text('ok')
+(w/'.git/HEAD').write_text('branch-canary')
 for path in [sys.argv[1],str(w/'.env'),str(w/'.git/config')]:
  try:
   if path==str(w/'.git/config'): pathlib.Path(path).write_text('forbidden')
@@ -251,7 +276,11 @@ class TicketExecutor:
         repo=next((r for r in read_registry(self.registry) if r['id']==job['repository_id']),None)
         if not repo:raise ExecutionError('Dépôt absent du registre local')
         source=Path(repo['path'])
-        if source.resolve()!=source or git(source,'rev-parse','--show-toplevel')!=str(source): raise ExecutionError('Le chemin autorisé a changé')
+        if source.resolve()!=source or not source.is_dir(): raise ExecutionError('Le chemin autorisé a changé')
+        initializing=repo.get('initialize',False) and not (source/'.git').exists()
+        if not initializing and ((source/'.git').is_symlink() or not (source/'.git').is_dir()):
+            raise ExecutionError('Le dépôt doit posséder son propre dossier .git, sans lien symbolique.')
+        if not initializing and git(source,'rev-parse','--show-toplevel')!=str(source): raise ExecutionError('Le chemin autorisé a changé')
         binary=codex_binary();preflight(binary)
         self.lock=ProcessLock(self.state/'codex.lock')
         folder=self.state/rid
@@ -259,22 +288,28 @@ class TicketExecutor:
             # Never relaunch an uncertain/crashed job, even if a request is duplicated.
             folder.mkdir(parents=True,mode=0o700,exist_ok=False)
             self.folder=folder;self.job=job
-            work=folder/'worktree';branch='atelier/'+rid
-            git(source,'worktree','add','-b',branch,str(work),'HEAD')
-            base=git(work,'rev-parse','HEAD')
-            common=Path(git(work,'rev-parse','--path-format=absolute','--git-common-dir'))
-            scratch=work/'.atelier-tmp';scratch.mkdir(mode=0o700)
+            work=source
+            try:base=None if initializing else git(work,'rev-parse','HEAD')
+            except ExecutionError:
+                if not repo.get('initialize',False):raise
+                base=None
+            common=work/'.git' if initializing else Path(git(work,'rev-parse','--path-format=absolute','--git-common-dir'))
+            if common.resolve()!=work/'.git':raise ExecutionError('Les métadonnées Git doivent rester dans le dépôt choisi.')
+            branch=None if base is None else git(work,'rev-parse','--abbrev-ref','HEAD')
+            scratch=folder/'tmp';scratch.mkdir(mode=0o700)
             private_json(folder/'schema.json',SCHEMA)
             private_json(folder/'receipt.json',{'id':rid,'repository':repo['id'],'branch':branch,'base_commit':base,'worktree':str(work),'status':'started','codex_model':model,'reasoning_effort':effort})
             # The role is versioned beside the service, outside the model's writable directory.
             role=tomllib.loads((ROOT.parent/'.codex/agents/atelier-ticket.toml').read_text())['developer_instructions']
             prompt=role+'\n\nDemande explicite de l’utilisateur (données JSON) :\n'+json.dumps({
                 'project':job.get('project_name',''),'ticket':job['ticket_snapshot'],
-                'related_tickets':job.get('related_tickets',[]),'branch':branch},ensure_ascii=False)
+                'related_tickets':job.get('related_tickets',[]),'repository_path':str(source),
+                'branch_before':branch,'initialize_git':initializing},ensure_ascii=False)
             cmd=[binary,'--no-daemon','exec','--ignore-user-config','--ignore-rules','--strict-config',
                  '--model',model,'-c','model_reasoning_effort='+json.dumps(effort),'-c','model_provider="openai"',
                  '--json','--output-schema',str(folder/'schema.json'),'--output-last-message',str(folder/'report.json'),
-                 '-C',str(work),*policy(work,scratch,common,runtime_binary=binary),'-']
+                 '-C',str(work),*policy(work,scratch,common,runtime_binary=binary,identity=git_identity(work)),'-']
+            if initializing: cmd.insert(3,'--skip-git-repo-check')
             self.log=(folder/'events.jsonl').open('wb');os.chmod(folder/'events.jsonl',0o600)
             if not self.gateway.rpc('worker_development_pulse',{'p_id':job['id'],'p_lease':job['lease'],'p_phase':'Préparation vérifiée ; démarrage Codex'}):
                 raise ExecutionError('Demande annulée ou accès retiré pendant la préparation')
@@ -332,7 +367,16 @@ class TicketExecutor:
             if self.process.returncode: error='Codex a terminé en erreur. Vérifiez le compte rendu et le travail local.'
         except (OSError,ValueError,KeyError):error='La session Codex ne fournit pas de résultat vérifiable.'
         report.update({k:receipt[k] for k in ('branch','worktree','base_commit','codex_model','reasoning_effort')})
-        report['changes']=git(Path(receipt['worktree']),'status','--short')[:4000]
+        work=Path(receipt['worktree'])
+        try:
+            report['branch']=git(work,'rev-parse','--abbrev-ref','HEAD')
+            report['changes']=git(work,'status','--short')
+            if receipt['base_commit']:
+                report['changes']+='\n'+git(work,'diff','--stat',receipt['base_commit'])
+            report['changes']=report['changes'][:4000]
+        except ExecutionError:
+            report['changes']='État Git indisponible ; vérifiez le dépôt local.'
+        if report.get('branch') is None:report.pop('branch',None)
         private_json(self.folder/'delivery.json',{'result':report,'error':error})
         return report,error
 
@@ -367,10 +411,13 @@ def main():
     try:
         if args.command=='add':print(json.dumps(add_repository(args.path,args.label),ensure_ascii=False,indent=2))
         elif args.command=='list':print(json.dumps(read_registry(),ensure_ascii=False,indent=2))
-        elif args.command=='remove':private_json(CONFIG,[r for r in read_registry() if r['id']!=str(uuid.UUID(args.id))]);print('Dépôt retiré. Le service actualisera son registre.')
+        elif args.command=='remove':
+            for registry in (CONFIG,REMOTE_CONFIG):
+                if registry.exists():private_json(registry,[r for r in read_registry(registry,include_web=False) if r['id']!=str(uuid.UUID(args.id))])
+            print('Dépôt retiré. Le service actualisera son registre.')
         else:
             print(subprocess.run([codex_binary(),'--version'],capture_output=True,text=True,check=True).stdout.strip())
-            preflight();print('Isolation vérifiée : écriture du dépôt, secrets et métadonnées protégés, réseau des commandes bloqué.')
+            preflight();print('Isolation vérifiée : branches et commits autorisés, secrets et configuration Git protégés, réseau des commandes bloqué.')
     except (ExecutionError,ValueError,OSError,subprocess.SubprocessError) as e:
         print(str(e));raise SystemExit(1)
 

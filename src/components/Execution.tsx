@@ -4,6 +4,7 @@ import { supabase, friendlyError } from '../lib/supabase'
 import { isBlocked, type Project, type Ticket } from '../domain'
 import { recentlySeen, serverNow } from '../lib/serverClock'
 import { Modal } from './ui'
+import { RepositoryPath } from './RepositoryPath'
 
 type CodexModel = { id: string; label: string; efforts: string[]; default_effort: string }
 const effortLabels: Record<string, string> = {
@@ -191,21 +192,18 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
             </select>
           </label>
           {repo && <p className="repository-path">{repo.local_path}</p>}
-          {!repositories.length && (
-            <p>
-              Sur le PC, enregistrez d’abord le chemin du dépôt avec le script Atelier. Il
-              apparaîtra ici automatiquement.
-            </p>
-          )}
+          {!repositories.length && <p>Saisissez ci-dessous le chemin du projet sur votre PC.</p>}
           {repo && !repo.enabled && (
             <p>
               Le PC n’autorise pas Run : vérifiez son diagnostic d’isolation et son catalogue Codex.
             </p>
           )}
           <p>
-            Une seule session Codex à la fois. Les changements restent sur une branche locale, à
-            vérifier et à fusionner sur le PC.
+            Une seule session Codex à la fois, directement dans le dépôt choisi. Codex gère sa
+            branche de travail, ses commits et ses tests. La validation et la fusion restent
+            humaines.
           </p>
+          <RepositoryPath projectId={project.id} />
           <small>
             {connected
               ? 'Suivi en direct connecté'
@@ -373,7 +371,10 @@ export function TicketExecution({
               Un effort plus élevé peut prendre plus de temps et consommer davantage de votre quota.
               Ultra, qui délègue à plusieurs agents, est exclu de cette exécution à un seul agent.
             </p>
-            <p>Le résultat restera à valider. Aucun push ni fusion automatique.</p>
+            <p>
+              Codex travaille directement dans le dépôt choisi, sur une branche dédiée. Les commits
+              sont autorisés ; le résultat reste à valider. Aucun push ni fusion automatique.
+            </p>
             {(reason || active || ticket.status === 'done') && (
               <p role="status">{reason || 'Ce ticket ne peut plus être lancé.'}</p>
             )}

@@ -46,6 +46,7 @@ beforeAll(async () => {
     '004_worker_heartbeat',
     '005_ticket_execution',
     '006_codex_selection',
+    '007_repository_paths',
   ])
     await db.exec(await readFile(`supabase/migrations/${name}.sql`, 'utf8'))
   await db.exec(
@@ -265,6 +266,71 @@ it('rejects malformed catalogues without changing the previously authorized choi
     (await db.query<any>('select codex_models from worker_repositories where id=$1', [R])).rows[0]
       .codex_models[0].id,
   ).toBe('gpt-6.1-sol')
+})
+
+it('accepts an exact human path, leases it only to the target PC, and binds only after validation', async () => {
+  await as(A)
+  const id = crypto.randomUUID(),
+    path = '/home/test/projet avec espaces'
+  expect(await rpc('request_repository', [id, P, W, path, false])).toBe(id)
+  expect(await rpc('request_repository', [id, P, W, path, false])).toBe(id)
+  await expect(rpc('request_repository', [id, P, W, '/other', false])).rejects.toThrow(
+    'autre chemin',
+  )
+  await as(B)
+  expect((await db.query('select * from repository_requests')).rows).toEqual([])
+  await expect(rpc('request_repository', [crypto.randomUUID(), P, W, path, false])).rejects.toThrow(
+    'inaccessible',
+  )
+  await as(A, 'aal1')
+  await expect(rpc('request_repository', [crypto.randomUUID(), P, W, path, false])).rejects.toThrow(
+    'Accès refusé',
+  )
+  await as(W, 'aal1')
+  expect((await db.query('select * from repository_requests')).rows).toEqual([])
+  const job = await rpc('worker_repository_claim')
+  expect(job.requested_path).toBe(path)
+  expect(job.create_if_missing).toBe(false)
+  expect(await rpc('worker_repository_claim')).toEqual({ retry_after: 65 })
+  expect(await rpc('worker_repository_finish', [id, crypto.randomUUID(), R, null])).toBe(false)
+  expect(await rpc('worker_repository_finish', [id, job.lease, R, null])).toBe(true)
+  expect(await rpc('worker_repository_finish', [id, job.lease, R, null])).toBe(true)
+  await as(A)
+  expect(
+    (await db.query<any>('select status from repository_requests where id=$1', [id])).rows[0]
+      .status,
+  ).toBe('ready')
+})
+it('rejects malformed paths, preserves bindings on failures, and cancels a stale path choice', async () => {
+  await as(A)
+  for (const path of [null, 'relative/path', '/path\ninvalid'])
+    await expect(
+      rpc('request_repository', [crypto.randomUUID(), P, W, path, false]),
+    ).rejects.toThrow('chemin absolu')
+  const id = crypto.randomUUID()
+  await rpc('request_repository', [id, P, W, '/home/test/new-project', true])
+  await as(W)
+  const job = await rpc('worker_repository_claim')
+  expect(job.create_if_missing).toBe(true)
+  await as(A)
+  await rpc('bind_project_repository', [P, R])
+  await as(W)
+  expect(await rpc('worker_repository_finish', [id, job.lease, R, null])).toBe(false)
+  await as(A)
+  const other = crypto.randomUUID()
+  await rpc('request_repository', [other, P, W, '/missing', false])
+  await as(W)
+  const failed = await rpc('worker_repository_claim')
+  await rpc('worker_repository_finish', [other, failed.lease, null, 'Dossier absent'])
+  await as(A)
+  expect(
+    (await db.query<any>('select repository_id from project_repositories where project_id=$1', [P]))
+      .rows[0].repository_id,
+  ).toBe(R)
+  expect(
+    (await db.query<any>('select error from repository_requests where id=$1', [other])).rows[0]
+      .error,
+  ).toBe('Dossier absent')
 })
 
 it('allows account deletion cascades without re-creating orphan notifications', async () => {

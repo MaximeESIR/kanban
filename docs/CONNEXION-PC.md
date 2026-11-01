@@ -1,6 +1,6 @@
 # Maxime : ce que tu dois faire, dans l’ordre
 
-**Ta connexion, la double authentification, le statut PC connecté et la recherche de notes fonctionnent. Le choix du modèle et de l’effort pour Run est ajouté : passe à l’étape 7, déjà dépliée, pour l’activer.**
+**Ta connexion, la double authentification, le statut PC connecté et la recherche de notes fonctionnent. Le choix du modèle et de l’effort est activé. Pour saisir librement le chemin d’un projet et travailler directement dedans, passe à l’étape 8, déjà dépliée.**
 
 **Déjà fait pour toi :** site GitHub Pages, application mobile installable, code, scripts, modèles de dictée/texte installés sur ce PC, service démarré et dépôt Atelier enregistré. **Tu n’as rien à réinstaller et aucun port de ta box à ouvrir.**
 
@@ -185,14 +185,14 @@ Après publication de la correction :
 3. Clique **Dicter**, autorise le microphone, prononce une phrase puis clique **Arrêter (90 s max)**. Le PC traite l’audio après cet arrêt ; le résultat doit apparaître sans recharger la page.
 4. Pour les tickets : dans un projet, ouvre **Associer un dépôt sur le PC**. Sélectionne **Atelier** ; vérifie le chemin `/home/mblaret/Documents/kanban`. Le premier ticket Codex réel sera testé ensemble.
 
-**Encore à vérifier avec toi :** la dictée depuis ton téléphone et un Run complet depuis le site (le modèle Codex a été testé réellement dans un dépôt séparé). Pour un autre dépôt, donne-moi son chemin exact : il faudra l’enregistrer sur le PC et mettre à jour le service.
+**Encore à vérifier avec toi :** la dictée depuis ton téléphone et un Run complet depuis le site (le modèle Codex a été testé réellement dans un dépôt séparé). Pour un autre dépôt, utilise la saisie du chemin décrite à l’étape 8.
 
 </details>
 
-<details open>
-<summary><strong>7 — MAINTENANT : activer le choix du modèle et de l’effort Codex</strong></summary>
+<details>
+<summary><strong>7 — DÉJÀ FAIT : choix du modèle et de l’effort Codex</strong></summary>
 
-Il reste **deux actions**, une seule fois. Les migrations précédentes et les comptes sont déjà configurés.
+**Tu as déjà exécuté cette migration et redémarré le service. Vérification réussie : migration 006 active, service redémarré, huit modèles détectés.** Les instructions suivantes sont conservées comme référence ; ne rejoue pas cette migration.
 
 **1. Dans Supabase :**
 
@@ -215,9 +215,39 @@ Ensuite, ouvre [Atelier](https://maximeesir.github.io/kanban/), fais **Ctrl + Ma
 
 Le premier modèle proposé actuellement est **GPT‑6.1 Sol**, effort **Faible (low)**. La liste provient du Codex installé sur le PC ; elle peut évoluer. Un refus d’accès au modèle ou un quota épuisé reste possible côté OpenAI. Ultra est exclu car il délègue à plusieurs agents, alors qu’Atelier conserve une seule session et un seul agent.
 
-La création d’un ticket seule ne lance rien. Run passe le ticket en **In progress** à la prise en charge, développe dans une copie séparée, puis fournit un rapport **À valider**. **Valider et passer à Done** ferme le ticket ; la fusion du code reste à faire sur le PC. Le choix du modèle et de l’effort est conservé dans le suivi.
+La création d’un ticket seule ne lance rien. Run passe le ticket en **In progress** à la prise en charge, développe directement dans le dépôt choisi, sur une branche gérée par Codex, puis fournit un rapport **À valider**. **Valider et passer à Done** ferme le ticket ; la fusion du code reste à faire sur le PC. Le choix du modèle et de l’effort est conservé dans le suivi.
 
-**Vérifié :** un vrai Codex a corrigé une fonction Python et exécuté ses tests dans un dépôt de test, sans modifier l’original. **Encore à vérifier :** le parcours complet depuis ton Run sur le site, après ces deux actions.
+**Vérifié :** un vrai Codex a corrigé une fonction Python et exécuté ses tests. Le dernier essai travaille directement dans le dépôt choisi, comme décrit à l’étape 8. **Encore à vérifier :** le parcours complet depuis ton Run sur le site.
+
+</details>
+
+<details open>
+<summary><strong>8 — MAINTENANT : saisir le chemin de n’importe quel projet</strong></summary>
+
+Cette mise à jour remplace la sélection limitée aux dépôts préenregistrés. **Le chemin que tu saisis sera le dossier de travail réel de Codex. L’application ne crée aucun clone, aucune copie ni aucun worktree.** Codex gère lui-même sa branche, ses commits et ses tests dans ce dépôt.
+
+Deux actions pour activer la mise à jour, une seule fois :
+
+1. Ouvre [le texte SQL 007](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/007_repository_paths.sql), copie tout son contenu, colle-le dans [SQL Editor de ton projet](https://supabase.com/dashboard/project/szutxqgfapqsmkixvvwy/sql/new), puis clique **Run** en haut à droite. Attends **Success. No rows returned**. Ne rejoue pas les migrations précédentes.
+2. Dans ton terminal Ubuntu, lance :
+
+```bash
+bash /home/mblaret/Documents/kanban/worker/connect_pc.sh
+```
+
+Le script demande ton mot de passe Ubuntu pour remplacer l’unité système et la redémarrer. **Un simple restart ne suffit pas cette fois : les permissions du service doivent permettre l’ouverture des dossiers choisis.** Le programme reste exécuté avec ton compte, jamais root. Codex conserve un accès limité au dossier sélectionné ; secrets, configuration Git, récepteur Atelier et réseau de ses commandes restent protégés.
+
+Ensuite :
+
+1. Recharge [Atelier](https://maximeesir.github.io/kanban/) avec **Ctrl + Maj + R**.
+2. Ouvre ton projet, puis **Associer un dépôt sur le PC**.
+3. Dans **Indiquer un chemin sur le PC**, choisis **Dépôt Git existant** ou **Nouveau dossier pour le projet**.
+4. Saisis le chemin complet, par exemple `/home/mblaret/Documents/chanson`, puis clique **Vérifier et associer** ou **Créer et associer**.
+5. Attends **Chemin vérifié et associé au projet**. Tu peux ensuite lancer un ticket avec **Run**.
+
+Le dossier parent d’un nouveau projet doit déjà exister. Aucun fichier existant n’est écrasé : un nouveau dossier doit être vide. Codex initialisera Git au premier Run. Le chemin vise toujours le PC, même si tu le saisis depuis ton téléphone. Si le PC est éteint, la demande attend son retour. L’association ne lance aucun développement.
+
+**Vérifié réellement :** GPT‑6.1 Sol/low a corrigé une fonction, créé une branche et commité dans le dépôt de test d’origine, sans copie secondaire ; tests revérifiés séparément. La mise à jour de l’unité et le parcours complet depuis ton site restent à confirmer après ces deux actions.
 
 </details>
 

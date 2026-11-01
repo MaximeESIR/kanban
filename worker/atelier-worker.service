@@ -10,12 +10,13 @@ Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=%h/.local/share/atelier/executions %h/.codex
-# Add one ReadWritePaths=/absolute/authorized/repo/.git per registered Git repository.
-# Git worktree metadata requires this; Codex commands retain their own stricter profile.
+# Reference only: connect_pc.sh generates the system unit for this PC.
+# The receiver opens explicitly requested paths with the user's permissions.
+# Codex commands have their own sandbox restricted to the selected directory.
+ProtectSystem=full
+ProtectHome=false
+ReadOnlyPaths=%h/.config/atelier %h/Documents/kanban/worker %h/Documents/kanban/.codex
 UMask=0077
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 [Install]
 WantedBy=default.target

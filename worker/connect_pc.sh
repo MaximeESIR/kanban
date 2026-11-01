@@ -13,7 +13,8 @@ sudo -v
 systemctl --user disable --now atelier-worker.service
 sudo install -m 0644 "$HOME/.config/atelier/atelier-worker-system.service" /etc/systemd/system/atelier-worker.service
 sudo systemctl daemon-reload
-if ! sudo systemctl enable --now atelier-worker.service; then
+sudo systemctl enable atelier-worker.service
+if ! sudo systemctl restart atelier-worker.service; then
   sudo journalctl -u atelier-worker.service --no-pager -n 25
   exit 1
 fi

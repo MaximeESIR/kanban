@@ -7,7 +7,8 @@ test('Run tolerates a fast device clock, live events update progress, human appr
   const uid = '10000000-0000-4000-8000-000000000001',
     pid = '20000000-0000-4000-8000-000000000001',
     tid = '30000000-0000-4000-8000-000000000001',
-    rid = '40000000-0000-4000-8000-000000000001'
+    rid = '40000000-0000-4000-8000-000000000001',
+    wid = '50000000-0000-4000-8000-000000000001'
   const stamp = () => new Date().toISOString()
   const user = {
     id: uid,
@@ -62,6 +63,7 @@ test('Run tolerates a fast device clock, live events update progress, human appr
     created_at: stamp(),
     updated_at: stamp(),
   }
+  let pathRequest: any = null
   let binding: any[] = [],
     run: any = null,
     submitted: any = null,
@@ -127,7 +129,16 @@ test('Run tolerates a fast device clock, live events update progress, human appr
     else if (p.includes('/auth/v1/user')) data = user
     else if (p.endsWith('/rpc/can_access_atelier')) data = true
     else if (p.endsWith('/rpc/atelier_schema_version')) data = 6
-    else if (p.endsWith('/rpc/pc_status'))
+    else if (p.endsWith('/rpc/repository_pcs'))
+      data = [{ id: wid, label: 'Mon PC', last_seen: stamp() }]
+    else if (p.endsWith('/repository_requests')) data = pathRequest ? [pathRequest] : []
+    else if (p.endsWith('/rpc/request_repository')) {
+      expect(body.p_path).toBe('/home/test/repos/jetson')
+      expect(body.p_worker).toBe(wid)
+      expect(body.p_create).toBe(false)
+      pathRequest = { id: body.p_id, requested_path: body.p_path, status: 'queued', error: null }
+      data = body.p_id
+    } else if (p.endsWith('/rpc/pc_status'))
       data = [{ label: 'PC', capabilities: [], last_seen: stamp() }]
     else if (p.endsWith('/projects')) data = [project]
     else if (p.endsWith('/tickets')) data = [ticket]
@@ -199,7 +210,15 @@ test('Run tolerates a fast device clock, live events update progress, human appr
   await page.getByRole('button', { name: 'Ouvrir Déploiement Jetson' }).click()
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled()
   await page.locator('.repository-panel summary').click()
-  await page.getByLabel('Dépôt du projet').selectOption(rid)
+  await page.getByLabel('Chemin du projet sur le PC').fill('/home/test/repos/jetson')
+  await page.getByRole('button', { name: 'Vérifier et associer', exact: true }).click()
+  await expect(page.getByText('Chemin envoyé — en attente du PC.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled()
+  pathRequest = { ...pathRequest, status: 'ready' }
+  binding = [{ project_id: pid, repository_id: rid }]
+  notify('repositories')
+  await expect(page.getByText('Chemin vérifié et associé au projet.')).toBeVisible()
+  await expect(page.getByLabel('Dépôt du projet')).toHaveValue(rid)
   await expect(page.getByText('/home/test/repos/jetson', { exact: true })).toBeVisible()
   await expect(page.getByText('Suivi en direct connecté', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Run', exact: true }).click()

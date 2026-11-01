@@ -3644,6 +3644,27 @@ svg {
   padding: 10px;
   border-radius: 8px;
 }
+.repository-path-form {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.repository-path-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: inherit;
+  background: var(--surface, transparent);
+}
+.repository-path-form p {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+.repository-path-form button {
+  margin-top: 12px;
+}
 .repository-path,
 .run-report code,
 .run-report pre {
