@@ -3,6 +3,16 @@ import { Play, Monitor, Check } from 'lucide-react'
 import { supabase, friendlyError } from '../lib/supabase'
 import { isBlocked, type Project, type Ticket } from '../domain'
 import { recentlySeen, serverNow } from '../lib/serverClock'
+import { Modal } from './ui'
+
+type CodexModel = { id: string; label: string; efforts: string[]; default_effort: string }
+const effortLabels: Record<string, string> = {
+  low: 'Faible',
+  medium: 'Moyen',
+  high: 'Élevé',
+  xhigh: 'Très élevé',
+  max: 'Maximum',
+}
 
 type LocalRepository = {
   id: string
@@ -10,6 +20,7 @@ type LocalRepository = {
   local_path: string
   enabled: boolean
   last_seen: string
+  codex_models?: CodexModel[]
 }
 type Binding = { project_id: string; repository_id: string }
 type Run = {
@@ -18,6 +29,8 @@ type Run = {
   status: 'queued' | 'running' | 'review' | 'approved' | 'failed' | 'cancelled'
   phase: string
   error: string | null
+  codex_model?: string | null
+  reasoning_effort?: string | null
   result: {
     summary?: string
     tests?: string[]
@@ -66,12 +79,12 @@ export function ExecutionProvider({
           supabase!.from('project_repositories').select('*'),
           supabase!
             .from('development_runs')
-            .select('id,ticket_id,status,phase,error,result')
+            .select('id,ticket_id,status,phase,error,result,codex_model,reasoning_effort')
             .order('created_at', { ascending: false })
             .limit(200),
           supabase!
             .from('development_runs')
-            .select('id,ticket_id,status,phase,error,result')
+            .select('id,ticket_id,status,phase,error,result,codex_model,reasoning_effort')
             .in('status', ['queued', 'running', 'review'])
             .order('created_at', { ascending: false }),
         ])
@@ -93,7 +106,8 @@ export function ExecutionProvider({
         if (live)
           setState((s) => ({
             ...s,
-            error: 'Exécution PC indisponible. Vérifiez la migration 005 et le service PC.',
+            error:
+              'Exécution PC indisponible. Appliquez la migration 006 puis redémarrez le service PC ; voir le guide de connexion.',
           }))
       } finally {
         inflight = false
@@ -184,7 +198,9 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
             </p>
           )}
           {repo && !repo.enabled && (
-            <p>Le PC n’a pas autorisé l’exécution. Lancez le diagnostic local avant Run.</p>
+            <p>
+              Le PC n’autorise pas Run : vérifiez son diagnostic d’isolation et son catalogue Codex.
+            </p>
           )}
           <p>
             Une seule session Codex à la fois. Les changements restent sur une branche locale, à
@@ -226,6 +242,10 @@ export function TicketExecution({
   const { repositories, bindings, runs, error: connectionError } = useContext(ExecutionContext)
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('')
+  const [choosing, setChoosing] = useState(false),
+    [requestId, setRequestId] = useState(''),
+    [modelId, setModelId] = useState(''),
+    [effort, setEffort] = useState('')
   const [, refreshClock] = useState(0)
   useEffect(() => {
     const timer = setInterval(() => refreshClock((value) => value + 1), 15000)
@@ -236,6 +256,8 @@ export function TicketExecution({
     (r) => r.id === bindings.find((b) => b.project_id === ticket.project_id)?.repository_id,
   )
   const run = runs.find((r) => r.ticket_id === ticket.id)
+  const models = repo?.codex_models || []
+  const model = models.find((m) => m.id === modelId)
   const active = run && ['queued', 'running', 'review'].includes(run.status)
   const blocked = isBlocked(ticket, tickets)
   const reason = !enabled
@@ -246,21 +268,25 @@ export function TicketExecution({
         : !repo
           ? 'Associez un dépôt autorisé à ce projet.'
           : !repo.enabled
-            ? 'Exécution non autorisée sur le PC : lancez le diagnostic local.'
+            ? 'Le PC n’autorise pas Run : isolation ou catalogue Codex indisponible.'
             : !recentlySeen(repo.last_seen, now)
               ? 'Le PC est déconnecté.'
-              : !navigator.onLine
-                ? 'Vous êtes hors ligne.'
-                : blocked
-                  ? 'Terminez les prérequis.'
-                  : '')
+              : !models.length
+                ? 'Choix Codex à activer : migration 006 puis redémarrage du service PC. Voir le guide de connexion.'
+                : !navigator.onLine
+                  ? 'Vous êtes hors ligne.'
+                  : blocked
+                    ? 'Terminez les prérequis.'
+                    : '')
   async function call(name: string, params: Record<string, unknown>) {
     setBusy(true)
     setError('')
     try {
       await action(name, params)
+      return true
     } catch (e) {
       setError(friendlyError(e))
+      return false
     } finally {
       setBusy(false)
     }
@@ -287,19 +313,119 @@ export function TicketExecution({
           className="button secondary run-button"
           title={reason || 'Exécuter ce ticket sur le PC'}
           disabled={busy || Boolean(reason)}
-          onClick={() =>
-            void call('submit_development', {
-              p_id: crypto.randomUUID(),
-              p_ticket: ticket.id,
-              p_version: ticket.updated_at,
-            })
-          }
+          onClick={() => {
+            const first = models.find((m) => m.id === run?.codex_model) || models[0]
+            setModelId(first?.id || '')
+            setEffort(
+              first?.efforts.includes(run?.reasoning_effort || '')
+                ? run!.reasoning_effort!
+                : first?.default_effort || '',
+            )
+            setError('')
+            setRequestId(crypto.randomUUID())
+            setChoosing(true)
+          }}
         >
           <Play size={14} /> Run
         </button>
       )}
+      {choosing && (
+        <Modal
+          title="Lancer avec Codex"
+          eyebrow={ticket.title}
+          busy={busy}
+          onClose={() => setChoosing(false)}
+        >
+          <div className="modal-form">
+            <p>
+              Une session sur votre PC, avec votre compte ChatGPT. Les modèles Codex sont exécutés
+              par OpenAI.
+            </p>
+            <label className="field">
+              Modèle Codex
+              <select
+                value={modelId}
+                disabled={busy}
+                onChange={(e) => {
+                  const next = models.find((m) => m.id === e.target.value)
+                  setModelId(e.target.value)
+                  setEffort(next?.default_effort || '')
+                }}
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Effort de raisonnement
+              <select value={effort} disabled={busy} onChange={(e) => setEffort(e.target.value)}>
+                {(model?.efforts || []).map((level) => (
+                  <option key={level} value={level}>
+                    {effortLabels[level] || level} ({level})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p>
+              Un effort plus élevé peut prendre plus de temps et consommer davantage de votre quota.
+              Ultra, qui délègue à plusieurs agents, est exclu de cette exécution à un seul agent.
+            </p>
+            <p>Le résultat restera à valider. Aucun push ni fusion automatique.</p>
+            {(reason || active || ticket.status === 'done') && (
+              <p role="status">{reason || 'Ce ticket ne peut plus être lancé.'}</p>
+            )}
+            {error && <p role="alert">{error}</p>}
+          </div>
+          <div className="modal-form">
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={busy}
+                onClick={() => setChoosing(false)}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                disabled={
+                  busy ||
+                  Boolean(reason) ||
+                  Boolean(active) ||
+                  ticket.status === 'done' ||
+                  !model?.efforts.includes(effort)
+                }
+                onClick={async () => {
+                  if (
+                    await call('submit_development', {
+                      p_id: requestId,
+                      p_ticket: ticket.id,
+                      p_version: ticket.updated_at,
+                      p_model: modelId,
+                      p_effort: effort,
+                    })
+                  )
+                    setChoosing(false)
+                }}
+              >
+                Lancer le développement
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {!compact && (
         <>
+          {run?.codex_model && (
+            <p>
+              Codex : {run.codex_model} · effort{' '}
+              {effortLabels[run.reasoning_effort || ''] || run.reasoning_effort}
+            </p>
+          )}
           {!active && reason && <small>{reason}</small>}
           {run?.result && (
             <div className="run-report">
@@ -371,7 +497,7 @@ export function TicketExecution({
           )}
         </>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && !choosing && <p role="alert">{error}</p>}
     </section>
   )
 }

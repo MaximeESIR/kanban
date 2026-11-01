@@ -28,11 +28,12 @@ Sur Android, ouvrir le site puis « Installer l’application » (ou le menu Chr
 - Dépôts explicitement enregistrés sur le PC, puis sélectionnables depuis le téléphone. Aucun chemin ou commande arbitraire venant d’un ticket n’est exécuté.
 - Réception Supabase Realtime par connexion WebSocket **sortante**, file durable et rattrapage après reconnexion. Pas de surveillance HTML ni de boucle LLM.
 - Une session Codex à la fois, tous projets confondus ; branche et worktree séparés. Le service récupère le ticket, envoie l’avancement et rend le rapport.
+- Avant Run, choix du modèle Codex et de son effort à partir du catalogue publié par le PC. Réglages validés côté base et worker, conservés dans le suivi ; aucun remplacement silencieux.
 - Passage à In progress à la prise en charge, puis **À valider** ; seul l’utilisateur clôt le ticket. Pas de push, de merge ou de déploiement automatique.
 - Isolation des commandes : lecture limitée, identifiants privés interdits, réseau bloqué, connecteurs et sous-agents désactivés. Échec du contrôle d’isolation = Run indisponible.
 - Modèles locaux installés et testés sur le PC de développement : Qwen3.5 4B et faster-whisper small. Les mesures et les étapes manuelles sont dans le [guide PC](docs/CONNEXION-PC.md).
 
-**Activation encore nécessaire :** créer/configurer Supabase, appliquer les migrations **001 à 005**, renseigner les identifiants privés du service. Sur le PC testé, Ubuntu bloque le sandbox Codex : une correction AppArmor avec droits administrateur reste nécessaire. Le flux réel connecté et une exécution réelle Codex restent donc à valider ; les tests utilisent un serveur et un exécuteur simulés pour ces parties.
+**État du PC de développement :** Supabase et TOTP configurés, service connecté, recherche de notes confirmée par le propriétaire. Une vraie correction Python par GPT‑6.1 Sol/low et ses tests réussissent dans le sandbox, sans modifier le dépôt d’origine. **Activation du choix Codex encore nécessaire :** appliquer uniquement la migration **006**, puis redémarrer le service PC. Les deux actions précises sont à l’étape 7 du [guide PC](docs/CONNEXION-PC.md). Le parcours complet d’un Run depuis le site et la dictée sur téléphone restent à confirmer ; les tests navigateur correspondants utilisent un serveur simulé.
 
 ## Version en ligne temporaire
 
@@ -85,7 +86,7 @@ Créer un projet Supabase dédié. Dans **SQL Editor**, exécuter une seule fois
 
 `supabase/migrations/001_atelier.sql`
 
-Puis exécuter, dans l’ordre, `002_connected_workspace.sql`, `003_ticket_relations.sql`, `004_worker_heartbeat.sql` et `005_ticket_execution.sql` dans le même dossier. Ces migrations créent les projets, tickets, notes, la file PC, la synchronisation, les relations entre tickets et les règles RLS qui imposent le TOTP. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API.
+Puis exécuter, dans l’ordre, `002_connected_workspace.sql`, `003_ticket_relations.sql`, `004_worker_heartbeat.sql`, `005_ticket_execution.sql` et `006_codex_selection.sql` dans le même dossier. Ces migrations créent les projets, tickets, notes, la file PC, la synchronisation, les relations entre tickets, le choix du modèle/effort et les règles RLS qui imposent le TOTP. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API. Ne rejouez pas les migrations déjà appliquées.
 
 ### 2. Fermer les inscriptions et créer votre compte
 

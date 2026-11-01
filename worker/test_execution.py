@@ -34,7 +34,9 @@ exec((work/'hello.py').read_text());assert answer==42
 report.write_text(json.dumps({'summary':'Valeur corrigée','tests':['assert answer == 42 : OK'],'limitations':[]}))
 print(json.dumps({'type':'turn.completed'}))
 ''');self.binary.chmod(0o700)
-        self.job={'id':'10000000-0000-4000-8000-000000000001','repository_id':self.row['id'],'lease':'lease','ticket_snapshot':{'title':'Corriger la valeur'},'project_name':'Test'}
+        self.job={'id':'10000000-0000-4000-8000-000000000001','repository_id':self.row['id'],'lease':'lease','ticket_snapshot':{'title':'Corriger la valeur'},'project_name':'Test','codex_model':'gpt-6.1-sol','reasoning_effort':'high'}
+        self.models=patch('ticket_executor.available_models',return_value=[{'id':'gpt-6.1-sol','efforts':['low','high']}])
+        self.models.start();self.addCleanup(self.models.stop)
     def tearDown(self):self.runner.close();self.temp.cleanup()
     def start(self):
         with patch('ticket_executor.codex_binary',return_value=str(self.binary)),patch('ticket_executor.preflight',return_value=True):self.runner.start(self.job)
@@ -50,7 +52,24 @@ print(json.dumps({'type':'turn.completed'}))
         self.assertEqual(data['p_result']['summary'],'Valeur corrigée')
         self.assertTrue((folder/'delivery.json').exists())
         self.assertFalse(any(k in data for k in ('status','ticket_status')))
+        self.assertEqual(data['p_result']['codex_model'],'gpt-6.1-sol')
+        self.assertEqual(data['p_result']['reasoning_effort'],'high')
         with self.assertRaises(FileExistsError):self.start()
+    def test_selected_model_and_effort_are_explicit_cli_arguments(self):
+        self.start()
+        args=self.runner.process.args
+        self.assertEqual(args[args.index('--model')+1],'gpt-6.1-sol')
+        self.assertIn('model_reasoning_effort="high"',args)
+        self.assertIn('model_provider="openai"',args)
+        receipt=json.loads((self.runner.folder/'receipt.json').read_text())
+        self.assertEqual(receipt['reasoning_effort'],'high')
+    def test_rejects_missing_unknown_or_injected_selection_before_creating_worktree(self):
+        for model,effort in [(None,None),('gpt-6.1-sol','ultra'),('gpt-6.1-sol','high; touch bad'),('--dangerously-bypass-approvals-and-sandbox','high'),('unknown','low')]:
+            with self.subTest(model=model,effort=effort):
+                self.job.update(codex_model=model,reasoning_effort=effort)
+                with self.assertRaisesRegex(ExecutionError,'Modèle ou effort'):self.start()
+                self.assertIsNone(self.runner.process)
+                self.assertFalse((self.root/'runs'/self.job['id']).exists())
     def test_git_checkout_filters_never_run_outside_the_sandbox(self):
         canary=self.root/'filter-executed'
         (self.repo/'.gitattributes').write_text('hello.py filter=malicious\n')

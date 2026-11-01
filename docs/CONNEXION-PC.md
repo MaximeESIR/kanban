@@ -1,6 +1,6 @@
 # Maxime : ce que tu dois faire, dans l’ordre
 
-**Ta connexion personnelle et la double authentification fonctionnent. Le programme du PC est installé et actif ; son compte Supabase, ses autorisations et Realtime ont été vérifiés. Reprends à l’étape 6, déjà dépliée, pour essayer la dictée dans l’application.**
+**Ta connexion, la double authentification, le statut PC connecté et la recherche de notes fonctionnent. Le choix du modèle et de l’effort pour Run est ajouté : passe à l’étape 7, déjà dépliée, pour l’activer.**
 
 **Déjà fait pour toi :** site GitHub Pages, application mobile installable, code, scripts, modèles de dictée/texte installés sur ce PC, service démarré et dépôt Atelier enregistré. **Tu n’as rien à réinstaller et aucun port de ta box à ouvrir.**
 
@@ -170,8 +170,8 @@ Enregistre avec **Ctrl + O**, puis **Entrée** ; quitte avec **Ctrl + X**. Garde
 
 </details>
 
-<details open>
-<summary><strong>6 — MAINTENANT : essayer la dictée dans Atelier</strong></summary>
+<details>
+<summary><strong>6 — PC CONNECTÉ : essayer la dictée dans Atelier</strong></summary>
 
 **Déjà fait :** profil Ubuntu installé, fichier privé rempli, diagnostic `doctor` réussi et service `atelier-worker` actif. Ton journal confirme son démarrage. Tu n’as aucune commande d’installation à refaire.
 
@@ -180,11 +180,44 @@ L’indication « PC non connecté » venait d’un décalage d’environ 2 min 
 Après publication de la correction :
 
 1. Ferme **tous les onglets Atelier**, ainsi que l’application Atelier si elle est installée et ouverte. Rouvre [Atelier](https://maximeesir.github.io/kanban/). Cela permet de charger la mise à jour sans effacer tes données.
+   Si l’ancienne version reste affichée sur PC, utilise **Ctrl + Maj + R** : cette actualisation a résolu le problème sur ton navigateur.
 2. Dans **Notes**, clique **Nouvelle note**, puis ouvre **Assistant PC**. Attends au plus 15 secondes : il doit afficher **connecté**.
 3. Clique **Dicter**, autorise le microphone, prononce une phrase puis clique **Arrêter (90 s max)**. Le PC traite l’audio après cet arrêt ; le résultat doit apparaître sans recharger la page.
 4. Pour les tickets : dans un projet, ouvre **Associer un dépôt sur le PC**. Sélectionne **Atelier** ; vérifie le chemin `/home/mblaret/Documents/kanban`. Le premier ticket Codex réel sera testé ensemble.
 
-**Encore à vérifier avec toi :** la dictée depuis ton téléphone et une première tâche Codex réelle. Pour un autre dépôt, donne-moi son chemin exact : il faudra l’enregistrer sur le PC et mettre à jour le service.
+**Encore à vérifier avec toi :** la dictée depuis ton téléphone et un Run complet depuis le site (le modèle Codex a été testé réellement dans un dépôt séparé). Pour un autre dépôt, donne-moi son chemin exact : il faudra l’enregistrer sur le PC et mettre à jour le service.
+
+</details>
+
+<details open>
+<summary><strong>7 — MAINTENANT : activer le choix du modèle et de l’effort Codex</strong></summary>
+
+Il reste **deux actions**, une seule fois. Les migrations précédentes et les comptes sont déjà configurés.
+
+**1. Dans Supabase :**
+
+- Ouvre [le texte de la migration 006](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/006_codex_selection.sql). Clique dans le texte, fais **Ctrl + A**, puis **Ctrl + C**.
+- Ouvre [SQL Editor de ton projet](https://supabase.com/dashboard/project/szutxqgfapqsmkixvvwy/sql/new).
+- Clique dans la grande zone de saisie à droite, colle avec **Ctrl + V**, puis clique sur le bouton vert **Run**, en haut à droite.
+- Le résultat attendu est **Success. No rows returned**. Ne relance pas les migrations 001 à 005.
+
+Fichier identique sur ton PC : `/home/mblaret/Documents/kanban/supabase/migrations/006_codex_selection.sql`.
+
+**2. Dans le terminal Ubuntu :** copie cette commande, appuie sur **Entrée**, puis saisis ton mot de passe Ubuntu s’il est demandé :
+
+```bash
+sudo systemctl restart atelier-worker.service
+```
+
+Ce redémarrage charge les scripts mis à jour. Le programme continue à tourner avec ton compte habituel. L’accès administrateur est nécessaire parce qu’Ubuntu gère cette unité comme un service système ; je ne dispose pas de ce mot de passe.
+
+Ensuite, ouvre [Atelier](https://maximeesir.github.io/kanban/), fais **Ctrl + Maj + R** sur PC et attends 30 secondes. Dans ton projet, associe le dépôt local avec **Associer un dépôt sur le PC**. Clique **Run** sur un ticket enregistré : choisis **Modèle Codex**, puis **Effort de raisonnement**, et clique **Lancer le développement**.
+
+Le premier modèle proposé actuellement est **GPT‑6.1 Sol**, effort **Faible (low)**. La liste provient du Codex installé sur le PC ; elle peut évoluer. Un refus d’accès au modèle ou un quota épuisé reste possible côté OpenAI. Ultra est exclu car il délègue à plusieurs agents, alors qu’Atelier conserve une seule session et un seul agent.
+
+La création d’un ticket seule ne lance rien. Run passe le ticket en **In progress** à la prise en charge, développe dans une copie séparée, puis fournit un rapport **À valider**. **Valider et passer à Done** ferme le ticket ; la fusion du code reste à faire sur le PC. Le choix du modèle et de l’effort est conservé dans le suivi.
+
+**Vérifié :** un vrai Codex a corrigé une fonction Python et exécuté ses tests dans un dépôt de test, sans modifier l’original. **Encore à vérifier :** le parcours complet depuis ton Run sur le site, après ces deux actions.
 
 </details>
 

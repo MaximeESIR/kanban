@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from atelier_worker import Gateway, Runner
 from realtime_events import RealtimeEvents
-from ticket_executor import TicketExecutor, ProcessLock, ExecutionError, read_registry, preflight, STATE
+from ticket_executor import TicketExecutor, ProcessLock, ExecutionError, read_registry, preflight, STATE, available_models
 
 def main():
     lock=ProcessLock(STATE/'service.lock')
@@ -32,9 +32,10 @@ def main():
                 now=time.monotonic()
                 if events.connected.is_set() and now-last_registry>30:
                     rows=read_registry()
+                    models=available_models() if ready else []
                     # Only registered paths and a verified sandbox can advertise execution.
-                    gateway.rpc('worker_repository_sync',{'p_repositories':[{**r,'enabled':ready} for r in rows]})
-                    allowed=[r['id'] for r in rows] if ready else []
+                    gateway.rpc('worker_repository_sync',{'p_repositories':[{**r,'enabled':ready and bool(models),'codex_models':models} for r in rows]})
+                    allowed=[r['id'] for r in rows] if ready and models else []
                     last_registry=now
                 if events.connected.is_set() and now-last_heartbeat>10:
                     gateway.rpc('worker_heartbeat',{'p_capabilities':ai.current_capabilities()})
@@ -47,9 +48,10 @@ def main():
                     job=gateway.rpc('worker_development_claim',{'p_repositories':allowed})
                     if job:
                         try:code.start(job)
-                        except Exception:
+                        except Exception as error:
+                            detail=str(error) if isinstance(error,ExecutionError) else 'La préparation locale a été refusée. Vérifiez le registre, Git et ticket_executor.py doctor.'
                             gateway.rpc('worker_development_finish',{'p_id':job['id'],'p_lease':job['lease'],
-                                'p_result':{'summary':'La préparation locale a été refusée. Vérifiez le registre, Git et ticket_executor.py doctor.','tests':[],'limitations':['Aucun résultat de code validé.']},
+                                'p_result':{'summary':detail,'tests':[],'limitations':['Aucun résultat de code validé.']},
                                 'p_error':'Préparation locale refusée ; aucune relance automatique.'})
                             wake.set()
                 # Notifications can be coalesced; after each completed operation we drain again.

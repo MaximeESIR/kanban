@@ -11,8 +11,10 @@ Pour les actions à réaliser, utilise [le guide pas à pas](CONNEXION-PC.md). C
 | Dictée locale | faster-whisper small installé, transcription française réellement exécutée sur le PC. |
 | Résumé, réécriture, recherche | Ollama + Qwen3.5 4B installés, trois inférences réelles réussies sur le PC. |
 | Run, suivi et validation humaine | Interface, file SQL, scripts, agent et tests disponibles. Parcours navigateur testé sur serveur simulé ; worktree, processus et rapport testés avec exécuteur simulé. |
-| Exécution réelle Codex | CLI connecté avec ChatGPT ; contrôle réel du sandbox réussi après corrections. Première tâche avec le modèle Codex encore à vérifier. |
+| Exécution réelle Codex | CLI connecté avec ChatGPT ; sandbox vérifié. Vraie correction Python par GPT‑6.1 Sol/low, tests exécutés par Codex puis revérifiés séparément, dépôt d’origine préservé. Parcours Run sur Supabase hébergé encore à vérifier après migration 006 et redémarrage du service. |
 | Téléphone → Supabase hébergé → PC → téléphone | Compte PC, autorisation, heartbeat et abonnement Realtime vérifiés. Service système installé et actif, diagnostic d’isolation réussi au démarrage. Essai depuis le téléphone encore à faire. |
+
+Le propriétaire confirme le statut PC connecté après **Ctrl + Maj + R**, puis une recherche de notes réussie via le moteur local. La dictée depuis son microphone reste à confirmer.
 
 La publication connectée n’accepte plus les identifiants publics `k@k.k` / `k`. Les anciennes versions de démonstration restent **locales à chaque navigateur**. Ils ne protègent pas un compte privé et n’activent aucun traitement sur le PC. Pas de pourcentage artificiel de « fonctionnement global » : distinguer l’interface, les moteurs réellement testés et les parcours entre appareils encore à vérifier.
 
@@ -160,6 +162,14 @@ Dans une note ou un ticket, ouvrir **Assistant PC**, toucher **Dicter**, parler,
 Les fichiers se trouvent sous `~/.local/share/atelier/executions/UUID/` : `worktree/`, `events.jsonl`, `receipt.json`, `report.json`, `delivery.json`. Journaux privés et modifications sont conservés après échec/annulation ; les nettoyer manuellement après revue, avec `git worktree remove` pour un worktree terminé et la suppression volontaire de sa branche si approprié. Les scripts ne suppriment pas automatiquement votre travail.
 
 L’agent est défini dans `.codex/agents/atelier-ticket.toml`. Le service charge son rôle dans **la session unique** ; il ne lance pas une équipe. On peut aussi demander à Codex d’utiliser ce rôle lors d’une session manuelle dans le projet, mais la gestion de file/statut appartient au service.
+
+### Choix du modèle et de l’effort
+
+Run ouvre un sélecteur avant toute soumission. Le PC lit le catalogue de son CLI via `codex debug models` (cache de cinq minutes, aucune inférence), conserve uniquement les modèles visibles et leurs efforts pris en charge, puis publie ces métadonnées avec ses dépôts. Le navigateur ne transmet aucun argument de commande libre. La migration 006 valide le couple choisi et le fige dans `development_runs` ; le worker le revérifie avant de créer un worktree. Un modèle absent n’est jamais remplacé silencieusement. Les anciennes demandes sans choix sont refusées par le nouveau worker ; l’interface affiche le besoin de mise à jour si le catalogue manque.
+
+Le lancement utilise explicitement `--model` et `-c model_reasoning_effort=…`, avec le fournisseur OpenAI. Le modèle travaille via le compte ChatGPT du PC, dans les limites de ce compte ; il ne s’agit pas du modèle Qwen local. Les commandes et fichiers restent sur le PC dans le sandbox existant. Les valeurs actuelles sont low, medium, high, xhigh et max selon le modèle. Ultra est exclu pour respecter l’absence de sous-agents. Sources : [modèles et efforts Codex](https://learn.chatgpt.com/docs/models), [configuration officielle](https://learn.chatgpt.com/docs/config-file/config-reference).
+
+Les exécutables auxiliaires `codex-code-mode-host` et `codex-exec-server` de l’installation standalone sont désormais copiés et vérifiés par SHA-256 avec le CLI dans son cache privé. La première inférence réelle a révélé que copier le CLI seul suffisait au diagnostic de sandbox, mais pas à l’exécution des outils. Aucun répertoire d’identifiants n’a été rendu accessible pour corriger ce problème.
 
 ## Limites et garanties précises
 

@@ -41,7 +41,7 @@ export function Modal({
     document.body.classList.add('modal-open')
     return () => {
       dialog.close()
-      document.body.classList.remove('modal-open')
+      if (!document.querySelector('dialog[open]')) document.body.classList.remove('modal-open')
     }
   }, [])
   return (

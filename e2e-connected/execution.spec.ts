@@ -126,7 +126,7 @@ test('Run tolerates a fast device clock, live events update progress, human appr
     if (p.includes('/auth/v1/token')) data = session
     else if (p.includes('/auth/v1/user')) data = user
     else if (p.endsWith('/rpc/can_access_atelier')) data = true
-    else if (p.endsWith('/rpc/atelier_schema_version')) data = 5
+    else if (p.endsWith('/rpc/atelier_schema_version')) data = 6
     else if (p.endsWith('/rpc/pc_status'))
       data = [{ label: 'PC', capabilities: [], last_seen: stamp() }]
     else if (p.endsWith('/projects')) data = [project]
@@ -137,6 +137,20 @@ test('Run tolerates a fast device clock, live events update progress, human appr
           id: rid,
           label: 'Jetson local',
           local_path: '/home/test/repos/jetson',
+          codex_models: [
+            {
+              id: 'gpt-6.1-sol',
+              label: 'GPT-6.1 Sol',
+              efforts: ['low', 'high'],
+              default_effort: 'low',
+            },
+            {
+              id: 'gpt-6-astra',
+              label: 'GPT-6 Astra',
+              efforts: ['medium', 'max'],
+              default_effort: 'medium',
+            },
+          ],
           enabled: true,
           last_seen: stamp(),
         },
@@ -153,6 +167,8 @@ test('Run tolerates a fast device clock, live events update progress, human appr
       run = {
         id: body.p_id,
         ticket_id: tid,
+        codex_model: body.p_model,
+        reasoning_effort: body.p_effort,
         status: 'queued',
         phase: 'En attente',
         result: null,
@@ -187,9 +203,25 @@ test('Run tolerates a fast device clock, live events update progress, human appr
   await expect(page.getByText('/home/test/repos/jetson', { exact: true })).toBeVisible()
   await expect(page.getByText('Suivi en direct connecté', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Run', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Lancer avec Codex' })).toBeVisible()
+  expect(submitted).toBe(null)
+  await expect(page.getByLabel('Modèle Codex')).toHaveValue('gpt-6.1-sol')
+  await page.getByLabel('Modèle Codex').selectOption('gpt-6-astra')
+  await expect(page.getByLabel('Effort de raisonnement')).toHaveValue('medium')
+  await page.getByLabel('Effort de raisonnement').selectOption('max')
+  await page.screenshot({ path: 'artifacts/codex-choice-' + test.info().project.name + '.png' })
+  await page.getByRole('button', { name: 'Lancer le développement', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Suivi : En attente', exact: true })).toBeVisible()
   expect(submitted.p_ticket).toBe(tid)
-  expect(Object.keys(submitted).sort()).toEqual(['p_id', 'p_ticket', 'p_version'])
+  expect(submitted.p_model).toBe('gpt-6-astra')
+  expect(submitted.p_effort).toBe('max')
+  expect(Object.keys(submitted).sort()).toEqual([
+    'p_effort',
+    'p_id',
+    'p_model',
+    'p_ticket',
+    'p_version',
+  ])
   // The server/PC transition is pushed through the actual browser WebSocket handler.
   run = { ...run, status: 'running', phase: 'Codex travaille et vérifie les changements' }
   ticket = { ...ticket, status: 'in_progress', updated_at: stamp() }

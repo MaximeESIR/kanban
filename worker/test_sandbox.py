@@ -56,6 +56,23 @@ class SandboxTests(unittest.TestCase):
             with self.assertRaises(ExecutionError):runtime_binary(source,root/'runtime')
             self.assertEqual(unrelated.read_text(),'untouched')
 
+    def test_runtime_copies_and_verifies_standalone_helpers_without_private_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'codex';source.write_text('cli')
+            helper=root/'codex-code-mode-host';helper.write_text('host')
+            (root/'codex-exec-server').write_text('executor')
+            (root/'auth.json').write_text('private canary')
+            copied=runtime_binary(source,root/'runtime')
+            self.assertEqual((copied.parent/helper.name).read_text(),'host')
+            self.assertEqual((copied.parent/helper.name).stat().st_mode&0o777,0o500)
+            self.assertFalse((copied.parent/'auth.json').exists())
+            helper.write_text('updated host')
+            runtime_binary(source,root/'runtime')
+            self.assertEqual((copied.parent/helper.name).read_text(),'updated host')
+            (copied.parent/helper.name).unlink()
+            (copied.parent/helper.name).symlink_to(root/'auth.json')
+            with self.assertRaises(ExecutionError):runtime_binary(source,root/'runtime')
+
     def test_diagnostic_identifies_invalid_config_without_leaking_raw_output(self):
         result=subprocess.CompletedProcess([],1,'','Error: invalid transport\nprivate-password-example')
         with patch('ticket_executor.subprocess.run',return_value=result):

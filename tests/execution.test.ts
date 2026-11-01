@@ -16,6 +16,8 @@ async function as(id: string, aal = 'aal2') {
   await db.exec('set role authenticated')
 }
 async function rpc(name: string, values: any[] = []) {
+  if (name === 'submit_development' && values.length === 3)
+    values = [...values, 'gpt-6.1-sol', 'high']
   return (
     await db.query<any>(
       `select public.${name}(${values.map((_, i) => '$' + (i + 1)).join(',')}) result`,
@@ -43,6 +45,7 @@ beforeAll(async () => {
     '003_ticket_relations',
     '004_worker_heartbeat',
     '005_ticket_execution',
+    '006_codex_selection',
   ])
     await db.exec(await readFile(`supabase/migrations/${name}.sql`, 'utf8'))
   await db.exec(
@@ -50,7 +53,22 @@ beforeAll(async () => {
   )
   await as(W, 'aal1')
   await rpc('worker_repository_sync', [
-    [{ id: R, label: 'Projet local', path: '/test/repo', enabled: true }],
+    [
+      {
+        id: R,
+        label: 'Projet local',
+        path: '/test/repo',
+        enabled: true,
+        codex_models: [
+          {
+            id: 'gpt-6.1-sol',
+            label: 'GPT-6.1 Sol',
+            efforts: ['low', 'high'],
+            default_effort: 'low',
+          },
+        ],
+      },
+    ],
   ])
   await rpc('worker_heartbeat', [[]])
   await as(A)
@@ -87,6 +105,8 @@ it('claims once, enters in_progress, only human approval marks Done', async () =
   await as(W, 'aal1')
   const j = await rpc('worker_development_claim', [[R]])
   expect(j.id).toBe(id)
+  expect(j.codex_model).toBe('gpt-6.1-sol')
+  expect(j.reasoning_effort).toBe('high')
   expect(await rpc('worker_development_claim', [[R]])).toBe(null)
   expect(
     (await db.query<any>('select kind from atelier_events')).rows.every((x) => x.kind === 'jobs'),
@@ -204,6 +224,47 @@ it('expires abandoned sessions during heartbeat without replaying them; manual D
   expect(
     (await db.query<any>('select status from development_runs where id=$1', [id2])).rows[0].status,
   ).toBe('approved')
+})
+
+it('validates model and effort, prevents parameter changes on retry, and rejects legacy launches', async () => {
+  const t = await ticket(),
+    id = crypto.randomUUID()
+  for (const [model, effort] of [
+    [null, null],
+    ['gpt-6.1-sol', 'ultra'],
+    ['unknown', 'high'],
+    ['gpt-6.1-sol', 'max'],
+  ])
+    await expect(
+      rpc('submit_development', [id, t.id, t.updated_at, model, effort]),
+    ).rejects.toThrow('Choisissez')
+  await rpc('submit_development', [id, t.id, t.updated_at, 'gpt-6.1-sol', 'low'])
+  await expect(
+    rpc('submit_development', [id, t.id, t.updated_at, 'gpt-6.1-sol', 'high']),
+  ).rejects.toThrow('autre réglage')
+  await expect(db.query("update worker_repositories set codex_models='[]'")).rejects.toThrow(
+    'permission denied',
+  )
+  await rpc('cancel_development', [id])
+})
+it('rejects malformed catalogues without changing the previously authorized choices', async () => {
+  await as(W)
+  for (const catalog of [
+    null,
+    {},
+    [{ id: 'x', label: 'x', efforts: ['ultra'], default_effort: 'ultra' }],
+    [{ id: '--unsafe', label: 'x', efforts: ['low'], default_effort: 'low' }],
+  ])
+    await expect(
+      rpc('worker_repository_sync', [
+        [{ id: R, label: 'Test', path: '/test/repo', enabled: true, codex_models: catalog }],
+      ]),
+    ).rejects.toThrow('Catalogue')
+  await as(A)
+  expect(
+    (await db.query<any>('select codex_models from worker_repositories where id=$1', [R])).rows[0]
+      .codex_models[0].id,
+  ).toBe('gpt-6.1-sol')
 })
 
 it('allows account deletion cascades without re-creating orphan notifications', async () => {

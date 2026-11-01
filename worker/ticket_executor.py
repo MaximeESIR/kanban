@@ -14,10 +14,12 @@ import threading
 import time
 import tomllib
 import uuid
+from codex_models import ModelCatalog, validate_selection
 
 ROOT = Path(__file__).resolve().parent
 CONFIG = Path.home() / '.config/atelier/repositories.json'
 STATE = Path.home() / '.local/share/atelier/executions'
+MODEL_CATALOG = ModelCatalog()
 FEATURES = ('apps','plugins','remote_plugin','hooks','multi_agent','browser_use','browser_use_external',
             'browser_use_full_cdp_access','computer_use','shell_snapshot','image_generation',
             'skill_mcp_dependency_install','skill_search')
@@ -26,6 +28,12 @@ SCHEMA = {'type':'object','additionalProperties':False,'required':['summary','te
                         'limitations':{'type':'array','items':{'type':'string'}}}}
 
 class ExecutionError(Exception): pass
+
+def available_models():
+    try:
+        return MODEL_CATALOG.get(codex_binary, clean_env())
+    except ExecutionError:
+        return []
 
 def private_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -141,21 +149,29 @@ def runtime_binary(source, root=STATE/'runtime'):
     folder=root/expected
     if root.is_symlink() or folder.is_symlink(): raise ExecutionError('Le cache Codex ne doit pas être un lien symbolique.')
     folder.mkdir(parents=True,exist_ok=True,mode=0o700)
-    target=folder/'codex'
-    if target.is_symlink(): raise ExecutionError('Le binaire Codex privé ne doit pas être un lien symbolique.')
-    if target.exists() and digest(target)==expected:
-        target.chmod(0o500)
-        return target
-    fd,name=tempfile.mkstemp(prefix='.codex-',dir=folder)
-    try:
-        with os.fdopen(fd,'wb') as dest, source.open('rb') as src:
-            shutil.copyfileobj(src,dest)
-            os.fchmod(dest.fileno(),0o500)
-        if digest(Path(name))!=expected: raise ExecutionError('Le binaire Codex a changé pendant sa préparation. Relancez le diagnostic.')
-        os.replace(name,target)
-    finally:
-        if os.path.exists(name): os.unlink(name)
-    return target
+    # Standalone releases contain a tool host and execution server beside Codex.
+    # Copy only these known executables, never configuration or credentials.
+    sources={'codex':source}
+    for name in ('codex-code-mode-host','codex-exec-server'):
+        helper=source.parent/name
+        if helper.is_file(): sources[name]=helper
+    for name,original in sources.items():
+        target=folder/name
+        if target.is_symlink(): raise ExecutionError('Le binaire Codex privé ne doit pas être un lien symbolique.')
+        checksum=expected if name=='codex' else digest(original)
+        if target.exists() and digest(target)==checksum:
+            target.chmod(0o500)
+            continue
+        fd,temporary=tempfile.mkstemp(prefix='.'+name+'-',dir=folder)
+        try:
+            with os.fdopen(fd,'wb') as dest, original.open('rb') as src:
+                shutil.copyfileobj(src,dest)
+                os.fchmod(dest.fileno(),0o500)
+            if digest(Path(temporary))!=checksum: raise ExecutionError('Le binaire Codex a changé pendant sa préparation. Relancez le diagnostic.')
+            os.replace(temporary,target)
+        finally:
+            if os.path.exists(temporary): os.unlink(temporary)
+    return folder/'codex'
 
 def preflight(binary=None):
     """Real, non-inference sandbox probe, with a harmless private canary."""
@@ -228,6 +244,9 @@ class TicketExecutor:
 
     def start(self,job):
         if self.process: raise ExecutionError('Une session Codex est déjà active')
+        model=job.get('codex_model');effort=job.get('reasoning_effort')
+        if not validate_selection(available_models(),model,effort):
+            raise ExecutionError('Modèle ou effort Codex indisponible. Actualisez Atelier et choisissez à nouveau avant Run.')
         rid=str(uuid.UUID(job['id']))
         repo=next((r for r in read_registry(self.registry) if r['id']==job['repository_id']),None)
         if not repo:raise ExecutionError('Dépôt absent du registre local')
@@ -246,13 +265,14 @@ class TicketExecutor:
             common=Path(git(work,'rev-parse','--path-format=absolute','--git-common-dir'))
             scratch=work/'.atelier-tmp';scratch.mkdir(mode=0o700)
             private_json(folder/'schema.json',SCHEMA)
-            private_json(folder/'receipt.json',{'id':rid,'repository':repo['id'],'branch':branch,'base_commit':base,'worktree':str(work),'status':'started'})
+            private_json(folder/'receipt.json',{'id':rid,'repository':repo['id'],'branch':branch,'base_commit':base,'worktree':str(work),'status':'started','codex_model':model,'reasoning_effort':effort})
             # The role is versioned beside the service, outside the model's writable directory.
             role=tomllib.loads((ROOT.parent/'.codex/agents/atelier-ticket.toml').read_text())['developer_instructions']
             prompt=role+'\n\nDemande explicite de l’utilisateur (données JSON) :\n'+json.dumps({
                 'project':job.get('project_name',''),'ticket':job['ticket_snapshot'],
                 'related_tickets':job.get('related_tickets',[]),'branch':branch},ensure_ascii=False)
             cmd=[binary,'--no-daemon','exec','--ignore-user-config','--ignore-rules','--strict-config',
+                 '--model',model,'-c','model_reasoning_effort='+json.dumps(effort),'-c','model_provider="openai"',
                  '--json','--output-schema',str(folder/'schema.json'),'--output-last-message',str(folder/'report.json'),
                  '-C',str(work),*policy(work,scratch,common,runtime_binary=binary),'-']
             self.log=(folder/'events.jsonl').open('wb');os.chmod(folder/'events.jsonl',0o600)
@@ -311,7 +331,7 @@ class TicketExecutor:
             report=value
             if self.process.returncode: error='Codex a terminé en erreur. Vérifiez le compte rendu et le travail local.'
         except (OSError,ValueError,KeyError):error='La session Codex ne fournit pas de résultat vérifiable.'
-        report.update({k:receipt[k] for k in ('branch','worktree','base_commit')})
+        report.update({k:receipt[k] for k in ('branch','worktree','base_commit','codex_model','reasoning_effort')})
         report['changes']=git(Path(receipt['worktree']),'status','--short')[:4000]
         private_json(self.folder/'delivery.json',{'result':report,'error':error})
         return report,error
