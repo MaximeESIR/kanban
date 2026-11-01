@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { Play, Monitor, Check } from 'lucide-react'
 import { supabase, friendlyError } from '../lib/supabase'
 import { isBlocked, type Project, type Ticket } from '../domain'
+import { recentlySeen, serverNow } from '../lib/serverClock'
 
 type LocalRepository = {
   id: string
@@ -225,11 +226,12 @@ export function TicketExecution({
   const { repositories, bindings, runs, error: connectionError } = useContext(ExecutionContext)
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('')
-  const [now, setNow] = useState(Date.now())
+  const [, refreshClock] = useState(0)
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 15000)
+    const timer = setInterval(() => refreshClock((value) => value + 1), 15000)
     return () => clearInterval(timer)
   }, [])
+  const now = serverNow()
   const repo = repositories.find(
     (r) => r.id === bindings.find((b) => b.project_id === ticket.project_id)?.repository_id,
   )
@@ -245,7 +247,7 @@ export function TicketExecution({
           ? 'Associez un dépôt autorisé à ce projet.'
           : !repo.enabled
             ? 'Exécution non autorisée sur le PC : lancez le diagnostic local.'
-            : now - Date.parse(repo.last_seen) > 45000
+            : !recentlySeen(repo.last_seen, now)
               ? 'Le PC est déconnecté.'
               : !navigator.onLine
                 ? 'Vous êtes hors ligne.'

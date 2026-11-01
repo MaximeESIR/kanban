@@ -13,6 +13,7 @@ import {
 } from '../lib/assistant'
 import { supabase, friendlyError } from '../lib/supabase'
 import { RichText } from './RichText'
+import { recentlySeen } from '../lib/serverClock'
 export function usePC(enabled: boolean) {
   const [pcs, setPCs] = useState<PC[]>([]),
     [jobs, setJobs] = useState<AIJob[]>([]),
@@ -218,9 +219,7 @@ export function Assistant({
     <div className="assistant-box">
       <button className="text-button" onClick={() => setOpen(!open)} aria-expanded={open}>
         <Monitor size={16} /> Assistant PC{' '}
-        {enabled && pcs.some((p) => p.last_seen && Date.now() - Date.parse(p.last_seen) < 45000)
-          ? '· connecté'
-          : '· non connecté'}
+        {enabled && pcs.some((p) => recentlySeen(p.last_seen)) ? '· connecté' : '· non connecté'}
       </button>
       {open && (
         <div className="assistant-panel">

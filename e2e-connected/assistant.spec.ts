@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test'
 for (const kind of ['rewrite', 'transcribe'] as const)
-  test(`authenticated UI submits ${kind}, polls the result, applies and undoes it`, async ({
+  test(`authenticated UI submits ${kind} with a skewed device clock, applies and undoes it`, async ({
     page,
   }) => {
+    await page.clock.setFixedTime(new Date(Date.now() + (kind === 'rewrite' ? 180000 : -180000)))
     const resultText =
       kind === 'transcribe'
         ? 'Texte dicté par le moteur simulé'
@@ -116,6 +117,10 @@ for (const kind of ['rewrite', 'transcribe'] as const)
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
+        headers: {
+          Date: new Date().toUTCString(),
+          'Access-Control-Expose-Headers': 'Date',
+        },
         body: JSON.stringify(data),
       })
     })
@@ -135,6 +140,9 @@ for (const kind of ['rewrite', 'transcribe'] as const)
       .getByRole('button', { name: /Assistant PC/ })
       .last()
       .click()
+    await expect(
+      page.getByRole('button', { name: 'Assistant PC · connecté', exact: true }).last(),
+    ).toBeVisible()
     if (kind === 'rewrite') {
       await page.getByLabel('Instructions personnalisées').fill('Rends le texte clair')
       await expect(page.getByRole('button', { name: 'Réécrire', exact: true })).toBeEnabled()

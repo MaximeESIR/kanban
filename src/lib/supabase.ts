@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { demoAllowed, publicConfigError } from '../config'
+import { serverClock } from './serverClock'
 
 const url = import.meta.env.VITE_SUPABASE_URL?.trim()
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
@@ -15,6 +16,15 @@ export const configError = publicConfigError(url, key)
 export const supabase =
   configured && !configError
     ? createClient(url!, key!, {
+        global: {
+          fetch: async (input, init) => {
+            const response = await fetch(input, init)
+            // Supabase exposes Date through CORS. Calibrate before callers
+            // render last_seen values, including after focus/reconnection.
+            serverClock.observe(response.headers.get('date'))
+            return response
+          },
+        },
         auth: {
           persistSession: true,
           autoRefreshToken: true,

@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test'
 
-test('Run uses the registered repository, live events update progress, human approval alone closes ticket', async ({
+test('Run tolerates a fast device clock, live events update progress, human approval alone closes ticket', async ({
   page,
 }) => {
+  await page.clock.setFixedTime(new Date(Date.now() + 180000))
   const uid = '10000000-0000-4000-8000-000000000001',
     pid = '20000000-0000-4000-8000-000000000001',
     tid = '30000000-0000-4000-8000-000000000001',
@@ -168,6 +169,10 @@ test('Run uses the registered repository, live events update progress, human app
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
+      headers: {
+        Date: new Date().toUTCString(),
+        'Access-Control-Expose-Headers': 'Date',
+      },
       body: JSON.stringify(data),
     })
   })

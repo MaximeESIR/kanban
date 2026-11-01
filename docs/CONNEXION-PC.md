@@ -1,8 +1,8 @@
 # Maxime : ce que tu dois faire, dans l’ordre
 
-**Ta connexion personnelle et la double authentification fonctionnent. Le fichier du PC est rempli ; son compte Supabase, ses autorisations et Realtime ont été vérifiés. Reprends à l’étape 6, déjà dépliée : il reste à installer le service en arrière-plan.**
+**Ta connexion personnelle et la double authentification fonctionnent. Le programme du PC est installé et actif ; son compte Supabase, ses autorisations et Realtime ont été vérifiés. Reprends à l’étape 6, déjà dépliée, pour essayer la dictée dans l’application.**
 
-**Déjà fait pour toi :** site GitHub Pages, application mobile installable, code, scripts, modèles de dictée/texte installés sur ce PC, service préparé et dépôt Atelier enregistré. **Tu n’as rien à réinstaller et aucun port de ta box à ouvrir.**
+**Déjà fait pour toi :** site GitHub Pages, application mobile installable, code, scripts, modèles de dictée/texte installés sur ce PC, service démarré et dépôt Atelier enregistré. **Tu n’as rien à réinstaller et aucun port de ta box à ouvrir.**
 
 **Si une étape échoue : arrête-toi à cette étape et donne-moi son numéro et le message d’erreur. Ne m’envoie pas de mot de passe.**
 
@@ -141,7 +141,7 @@ Si tu as créé des notes/tickets dans la démo, ouvre d’abord [Atelier](https
 </details>
 
 <details>
-<summary><strong>5 — TOI : remplir le fichier privé du PC</strong></summary>
+<summary><strong>5 — DÉJÀ FAIT : remplir le fichier privé du PC</strong></summary>
 
 Sur **ton PC Ubuntu**, ouvre un terminal avec **Ctrl + Alt + T**, puis lance :
 
@@ -149,7 +149,7 @@ Sur **ton PC Ubuntu**, ouvre un terminal avec **Ctrl + Alt + T**, puis lance :
 nano /home/mblaret/.config/atelier/worker.env
 ```
 
-**Sur ton PC, l’URL, la clé publique et l’adresse du compte PC ont déjà été renseignées. Il te reste uniquement à remplir `ATELIER_WORKER_PASSWORD=` avec le mot de passe de ce compte PC.** Ne le colle pas dans la conversation.
+**Les quatre valeurs sont déjà renseignées et la connexion a été vérifiée.** Les instructions suivantes servent uniquement de référence pour une nouvelle installation. Ne colle pas le mot de passe dans la conversation.
 
 Voici les quatre lignes concernées, pour les reconnaître dans le fichier :
 
@@ -171,28 +171,20 @@ Enregistre avec **Ctrl + O**, puis **Entrée** ; quitte avec **Ctrl + X**. Garde
 </details>
 
 <details open>
-<summary><strong>6 — MAINTENANT : démarrer le programme du PC</strong></summary>
+<summary><strong>6 — MAINTENANT : essayer la dictée dans Atelier</strong></summary>
 
-**Déjà fait :** profil Ubuntu installé, fichier privé rempli, diagnostic `doctor` réussi et connexion du compte PC à Supabase vérifiée. Tu n’as pas à refaire les commandes précédentes.
+**Déjà fait :** profil Ubuntu installé, fichier privé rempli, diagnostic `doctor` réussi et service `atelier-worker` actif. Ton journal confirme son démarrage. Tu n’as aucune commande d’installation à refaire.
 
-Le service utilisateur Ubuntu empêchait Codex de créer son isolation. Une unité système a été préparée pour conserver les protections de fichiers ; **le programme continuera à s’exécuter avec ton compte habituel, jamais comme administrateur**.
+L’indication « PC non connecté » venait d’un décalage d’environ 2 min 50 entre l’horloge du PC et Supabase. Le code utilise désormais l’heure de Supabase pour cette vérification. Le programme du PC conserve ses protections et s’exécute avec ton compte habituel.
 
-Dans le terminal de ton PC, copie cette seule commande puis appuie sur **Entrée** :
+Après publication de la correction :
 
-```bash
-bash /home/mblaret/Documents/kanban/worker/connect_pc.sh
-```
+1. Ferme **tous les onglets Atelier**, ainsi que l’application Atelier si elle est installée et ouverte. Rouvre [Atelier](https://maximeesir.github.io/kanban/). Cela permet de charger la mise à jour sans effacer tes données.
+2. Dans **Notes**, clique **Nouvelle note**, puis ouvre **Assistant PC**. Attends au plus 15 secondes : il doit afficher **connecté**.
+3. Clique **Dicter**, autorise le microphone, prononce une phrase puis clique **Arrêter (90 s max)**. Le PC traite l’audio après cet arrêt ; le résultat doit apparaître sans recharger la page.
+4. Pour les tickets : dans un projet, ouvre **Associer un dépôt sur le PC**. Sélectionne **Atelier** ; vérifie le chemin `/home/mblaret/Documents/kanban`. Le premier ticket Codex réel sera testé ensemble.
 
-Le script refait le diagnostic, vérifie le fichier du service, demande le **mot de passe administrateur Ubuntu**, installe le service et le démarre. Rien ne s’affiche pendant la saisie du mot de passe : c’est normal. Ne communique ce mot de passe ni ici ni dans GitHub.
-
-**C’est bon quand :** tu lis **active**, puis **Service Atelier démarré**. Si une erreur apparaît, transmets le message affiché. Le premier démarrage de cette unité système reste à vérifier sur ce PC.
-
-Ensuite, dans Atelier :
-
-1. Ouvre une note → **Assistant PC** : le PC doit apparaître connecté. Fais une courte dictée pour vérifier le retour du texte.
-2. Dans un projet, ouvre **Associer un dépôt sur le PC**. Sélectionne **Atelier** ; vérifie le chemin `/home/mblaret/Documents/kanban`.
-3. Pour un autre dépôt, donne-moi son chemin exact : il faudra l’enregistrer sur le PC et mettre à jour le service.
-4. Le premier ticket Codex réel sera testé ensemble ; son exécution et la dictée depuis le téléphone restent à vérifier de bout en bout.
+**Encore à vérifier avec toi :** la dictée depuis ton téléphone et une première tâche Codex réelle. Pour un autre dépôt, donne-moi son chemin exact : il faudra l’enregistrer sur le PC et mettre à jour le service.
 
 </details>
 

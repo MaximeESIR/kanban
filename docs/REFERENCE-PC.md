@@ -12,9 +12,9 @@ Pour les actions à réaliser, utilise [le guide pas à pas](CONNEXION-PC.md). C
 | Résumé, réécriture, recherche | Ollama + Qwen3.5 4B installés, trois inférences réelles réussies sur le PC. |
 | Run, suivi et validation humaine | Interface, file SQL, scripts, agent et tests disponibles. Parcours navigateur testé sur serveur simulé ; worktree, processus et rapport testés avec exécuteur simulé. |
 | Exécution réelle Codex | CLI connecté avec ChatGPT ; contrôle réel du sandbox réussi après corrections. Première tâche avec le modèle Codex encore à vérifier. |
-| Téléphone → Supabase hébergé → PC → téléphone | Compte PC, autorisation, heartbeat et abonnement Realtime vérifiés. Service système préparé ; installation administrateur et essai depuis le téléphone encore à faire. |
+| Téléphone → Supabase hébergé → PC → téléphone | Compte PC, autorisation, heartbeat et abonnement Realtime vérifiés. Service système installé et actif, diagnostic d’isolation réussi au démarrage. Essai depuis le téléphone encore à faire. |
 
-La publication connectée n’accepte plus les identifiants publics `k@k.k` / `k`. Les anciennes versions de démonstration restent **locales à chaque navigateur**. Ils ne protègent pas un compte privé et n’activent aucun traitement sur le PC. Pas de pourcentage artificiel de « fonctionnement global » : distinguer l’interface, les moteurs réellement testés et la connexion encore à activer.
+La publication connectée n’accepte plus les identifiants publics `k@k.k` / `k`. Les anciennes versions de démonstration restent **locales à chaque navigateur**. Ils ne protègent pas un compte privé et n’activent aucun traitement sur le PC. Pas de pourcentage artificiel de « fonctionnement global » : distinguer l’interface, les moteurs réellement testés et les parcours entre appareils encore à vérifier.
 
 ## 2. Modèles déjà installés sur ce PC
 
@@ -88,7 +88,7 @@ Après ajout d’un dépôt, régénérer le service ci-dessous : systemd doit p
 
 ## 5. Configurer et démarrer le service
 
-Sur ce PC, les identifiants privés sont renseignés et la connexion Supabase est vérifiée. Le service utilisateur échoue cependant avec `ProtectHome`/`ProtectSystem` : systemd crée un namespace utilisateur qui reçoit le profil AppArmor `unprivileged_userns`, incompatible ici avec l’isolation imbriquée de Codex. La solution préparée est un service système avec `User=` et `Group=` fixés au compte habituel, en conservant les protections. Le processus Atelier ne tourne jamais comme root. Ollama fonctionne déjà.
+Sur ce PC, les identifiants privés sont renseignés et la connexion Supabase est vérifiée. Le service système est installé et actif depuis le 1er novembre 2026 à 14 h 21 (heure affichée par ce PC), après réussite du diagnostic d’isolation. Il remplace le service utilisateur : ses protections `ProtectHome`/`ProtectSystem` déclenchaient ici un namespace utilisateur avec le profil AppArmor `unprivileged_userns`, incompatible avec l’isolation imbriquée de Codex. L’unité système conserve les protections, avec `User=` et `Group=` fixés au compte habituel. Le processus Atelier ne tourne jamais comme root. Ollama fonctionne déjà. Les commandes ci-dessous servent de référence pour une nouvelle installation ou un changement de dépôts autorisés.
 
 ```bash
 python3 worker/install_service.py --system
@@ -142,6 +142,8 @@ sequenceDiagram
 **Oui, un petit script tourne en continu. Non, il n’y a aucun port entrant Internet à ouvrir**, ni redirection sur la box. Le PC établit lui-même le WebSocket TLS vers Supabase et utilise HTTPS pour les RPC. Ollama dispose seulement d’un port local sur le PC. On ne lit pas la page HTML et aucun LLM ne tourne pour surveiller les tickets.
 
 Les demandes et résultats sont persistants dans Supabase ; les notifications réveillent le service. Après abonnement et reconnexion, il rattrape la file. Après une fin de traitement, il vérifie s’il reste une demande. Les heartbeats annoncent la présence (environ 10 s), le navigateur vérifie cette présence toutes les 15 s, et la file hors ligne est entretenue toutes les 30 s. Ce ne sont pas des appels de modèle ni du scraping de page. L’application reçoit les changements sans reload ; un navigateur suspendu rattrape à la reprise.
+
+La fraîcheur des heartbeats se calcule avec l’en-tête HTTPS `Date` de Supabase, exposé au navigateur par CORS, puis le temps monotone écoulé (`performance.now()`). Le statut PC et Run ne dépendent donc plus de l’horloge locale : un décalage d’environ 170 secondes avait produit un faux « non connecté » sur ce PC. Les autorisations et l’admission des demandes restent contrôlées côté SQL avec l’heure du serveur ; aucune règle de sécurité n’est assouplie.
 
 ### Dictée et notes
 

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { recentlySeen, serverNow } from './serverClock'
 export type JobKind = 'summarize' | 'rewrite' | 'transcribe' | 'search'
 export type AIJob = {
   context?: { target?: string; hash?: string }
@@ -10,10 +11,8 @@ export type AIJob = {
   created_at: string
 }
 export type PC = { label: string; capabilities: JobKind[]; last_seen: string | null }
-export function available(pcs: PC[], kind: JobKind, now = Date.now()) {
-  return pcs.some(
-    (p) => p.last_seen && now - Date.parse(p.last_seen) < 45000 && p.capabilities.includes(kind),
-  )
+export function available(pcs: PC[], kind: JobKind, now = serverNow()) {
+  return pcs.some((p) => recentlySeen(p.last_seen, now) && p.capabilities.includes(kind))
 }
 export async function submit(kind: JobKind, input: Record<string, unknown>) {
   if (!supabase || !navigator.onLine) throw new Error('Connexion sécurisée et réseau nécessaires.')
