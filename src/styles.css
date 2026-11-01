@@ -3619,3 +3619,71 @@ svg {
   margin-bottom: 10px;
   gap: 12px;
 }
+
+.repository-panel {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border, #deded8);
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+.repository-panel summary {
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.repository-panel label {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.repository-panel select {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+}
+.repository-path,
+.run-report code,
+.run-report pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.ticket-execution {
+  margin: 12px 20px;
+  padding: 12px;
+  border: 1px solid var(--border, #deded8);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+.ticket-execution.compact {
+  margin: 8px 0;
+  padding: 0;
+  border: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.run-button {
+  min-height: 36px;
+  padding: 6px 12px;
+}
+.run-phase:disabled {
+  opacity: 1;
+  color: inherit;
+}
+.run-report {
+  width: 100%;
+  line-height: 1.5;
+}
+.run-report ul {
+  padding-left: 20px;
+}
+.ticket-execution p {
+  margin: 4px 0;
+}

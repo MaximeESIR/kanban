@@ -1,6 +1,6 @@
-# Atelier — V1.1
+# Atelier — V1.2
 
-Application personnelle de projets, kanban et notes. Interface React / TypeScript adaptée à l’ordinateur et au téléphone, déployable sur GitHub Pages. Supabase assure l’authentification et le stockage privé. Aucune exécution de code ni aucun agent de développement n’est intégré.
+Application personnelle de projets, kanban et notes. Interface React / TypeScript adaptée à l’ordinateur et au téléphone, déployable sur GitHub Pages. Supabase assure l’authentification et le stockage privé. Un service local reçoit les demandes et peut lancer une session Codex par ticket, après autorisation du dépôt et vérification de son isolation.
 
 ## V1.0 : application installable et assistant PC
 
@@ -17,9 +17,20 @@ Sur Android, ouvrir le site puis « Installer l’application » (ou le menu Chr
 - Un parent regroupe les sous-tickets ; des prérequis multiples déterminent séparément si un ticket est prêt. Le même prérequis peut servir à plusieurs tickets. Compteurs, navigation entre relations et indentation dans une même colonne.
 - Vue globale triable par priorité ou dernière modification, préférence conservée sur l’appareil.
 - Brouillon local à chaque saisie, sauvegarde des tickets existants à la fermeture et au passage en arrière-plan, récupération après interruption. Une fiche devenue obsolète ne peut pas écraser un autre changement ; le brouillon peut être copié dans un nouveau ticket.
-- Le PC vérifie les nouvelles demandes toutes les deux secondes ; une annulation pendant le calcul ne lui fait pas prendre une seconde demande prématurément.
+- Les demandes PC sont désormais reçues par événements (voir V1.2).
 
 **Mise à jour Supabase :** appliquer aussi `003_ticket_relations.sql` et `004_worker_heartbeat.sql`. Une base trop ancienne est signalée avant l’ouverture de l’espace. [État du projet, étapes manuelles et trajet d’une dictée](docs/CONNEXION-PC.md).
+
+## V1.2 : un dépôt par projet, Run et validation humaine
+
+- Dépôts explicitement enregistrés sur le PC, puis sélectionnables depuis le téléphone. Aucun chemin ou commande arbitraire venant d’un ticket n’est exécuté.
+- Réception Supabase Realtime par connexion WebSocket **sortante**, file durable et rattrapage après reconnexion. Pas de surveillance HTML ni de boucle LLM.
+- Une session Codex à la fois, tous projets confondus ; branche et worktree séparés. Le service récupère le ticket, envoie l’avancement et rend le rapport.
+- Passage à In progress à la prise en charge, puis **À valider** ; seul l’utilisateur clôt le ticket. Pas de push, de merge ou de déploiement automatique.
+- Isolation des commandes : lecture limitée, identifiants privés interdits, réseau bloqué, connecteurs et sous-agents désactivés. Échec du contrôle d’isolation = Run indisponible.
+- Modèles locaux installés et testés sur le PC de développement : Qwen3.5 4B et faster-whisper small. Les mesures et les étapes manuelles sont dans le [guide PC](docs/CONNEXION-PC.md).
+
+**Activation encore nécessaire :** créer/configurer Supabase, appliquer les migrations **001 à 005**, renseigner les identifiants privés du service. Sur le PC testé, Ubuntu bloque le sandbox Codex : une correction AppArmor avec droits administrateur reste nécessaire. Le flux réel connecté et une exécution réelle Codex restent donc à valider ; les tests utilisent un serveur et un exécuteur simulés pour ces parties.
 
 ## Version en ligne temporaire
 
@@ -62,7 +73,7 @@ Sur une adresse publique, la démo nécessite `VITE_PUBLIC_DEMO=true` au moment 
 - Tickets : titre, description, priorité, difficulté, parent facultatif et jusqu’à 50 prérequis du même projet. Les cycles sont interdits dans l’interface et dans la base. Les prérequis inachevés sont signalés sans empêcher de déplacer le ticket. La hiérarchie ne change pas automatiquement les statuts.
 - Notes avec recherche et enregistrement automatique après 700 ms d’inactivité. Changer d’écran n’annule pas l’enregistrement. Les erreurs de sauvegarde sont affichées ; la déconnexion attend la sauvegarde des notes.
 - Export JSON des projets, tickets et notes avec le bouton de téléchargement. L’import de sauvegardes n’est pas implémenté.
-- Actualisation à la reprise de la fenêtre et toutes les 3 secondes. Le bouton d’actualisation récupère immédiatement les changements d’un autre appareil.
+- Actualisation par événements Supabase, à la reprise de la fenêtre, et maintenance de la file hors ligne toutes les 30 secondes. Le bouton d’actualisation récupère immédiatement les changements d’un autre appareil.
 
 ## Connecter Supabase
 
@@ -72,7 +83,7 @@ Créer un projet Supabase dédié. Dans **SQL Editor**, exécuter une seule fois
 
 `supabase/migrations/001_atelier.sql`
 
-Puis exécuter, dans l’ordre, `002_connected_workspace.sql`, `003_ticket_relations.sql` et `004_worker_heartbeat.sql` dans le même dossier. Ces migrations créent les projets, tickets, notes, la file PC, la synchronisation, les relations entre tickets et les règles RLS qui imposent le TOTP. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API.
+Puis exécuter, dans l’ordre, `002_connected_workspace.sql`, `003_ticket_relations.sql`, `004_worker_heartbeat.sql` et `005_ticket_execution.sql` dans le même dossier. Ces migrations créent les projets, tickets, notes, la file PC, la synchronisation, les relations entre tickets et les règles RLS qui imposent le TOTP. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API.
 
 ### 2. Fermer les inscriptions et créer votre compte
 

@@ -1,3 +1,5 @@
+import { subscribeWorkspace } from '../lib/events'
+import { ExecutionProvider } from './Execution'
 import { createContext, useContext, type ReactNode, useEffect, useRef, useState } from 'react'
 import { Mic, Square, Sparkles, Monitor } from 'lucide-react'
 import {
@@ -18,9 +20,14 @@ export function usePC(enabled: boolean) {
   useEffect(() => {
     if (!enabled || !supabase) return
     let live = true,
-      inflight = false
+      inflight = false,
+      again = false
     const poll = async () => {
-      if (inflight || !navigator.onLine) return
+      if (!navigator.onLine) return
+      if (inflight) {
+        again = true
+        return
+      }
       inflight = true
       try {
         const [p, j] = await Promise.all([
@@ -45,10 +52,18 @@ export function usePC(enabled: boolean) {
         }
       } finally {
         inflight = false
+        if (again && live) {
+          again = false
+          void poll()
+        }
       }
     }
     void poll()
-    const timer = setInterval(poll, 3000)
+    const timer = setInterval(async () => {
+      if (!navigator.onLine) return
+      const p = await supabase!.rpc('pc_status')
+      if (live) setPCs(p.error ? [] : p.data || [])
+    }, 15000)
     const refresh = () => void poll()
     window.addEventListener('atelier-pc-refresh', refresh)
     window.addEventListener('online', refresh)
@@ -76,7 +91,12 @@ export function AssistantProvider({
   children: ReactNode
 }) {
   const state = usePC(enabled)
-  return <PCContext.Provider value={state}>{children}</PCContext.Provider>
+  useEffect(() => (enabled ? subscribeWorkspace() : undefined), [enabled])
+  return (
+    <PCContext.Provider value={state}>
+      <ExecutionProvider enabled={enabled}>{children}</ExecutionProvider>
+    </PCContext.Provider>
+  )
 }
 export function Assistant({
   targetId,

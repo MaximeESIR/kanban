@@ -1,3 +1,4 @@
+import { TicketExecution } from './Execution'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Trash2 } from 'lucide-react'
 import {
@@ -281,6 +282,14 @@ export function TicketForm({
           }}
         />
       </div>
+      {ticket && (
+        <TicketExecution
+          ticket={ticket}
+          tickets={tickets}
+          enabled={assistantEnabled}
+          unsaved={dirty()}
+        />
+      )}
       <form
         className="modal-form"
         onSubmit={(e: FormEvent) => {

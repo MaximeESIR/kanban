@@ -255,7 +255,8 @@ function Workspace({
       },
       onOffline = () => setOnline(false)
     const pop = () => setRoute(readRoute())
-    const interval = setInterval(onFocus, 3000)
+    const interval = setInterval(onFocus, 30000) // Offline queue maintenance; remote changes arrive through Realtime.
+    window.addEventListener('atelier-workspace-refresh', onFocus)
     window.addEventListener('focus', onFocus)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
@@ -270,6 +271,7 @@ function Workspace({
     return () => {
       active.current = false
       clearInterval(interval)
+      window.removeEventListener('atelier-workspace-refresh', onFocus)
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)

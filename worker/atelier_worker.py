@@ -85,14 +85,14 @@ def execute(job, pipe):
         model = os.environ.get('ATELIER_MODEL', '')
         def chat(system, user):
             if not model: raise ValueError('No local model configured')
-            r=request(endpoint+'/api/chat', {'model':model, 'stream':False, 'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'options':{'num_ctx':32768}}, timeout=220)
+            r=request(endpoint+'/api/chat', {'model':model, 'stream':False, **({'think':False} if os.environ.get('ATELIER_THINK')=='false' else {}), 'messages':[{'role':'system','content':system},{'role':'user','content':user}], 'options':{'num_ctx':int(os.environ.get('ATELIER_CONTEXT','8192'))}}, timeout=220)
             text=r['message']['content']
             if not isinstance(text,str) or not text.strip() or len(text)>200000: raise ValueError('Invalid model output')
             return text
         def transcribe(path):
             from faster_whisper import WhisperModel
             model=WhisperModel(os.environ['ATELIER_WHISPER_MODEL'],device=os.environ.get('ATELIER_WHISPER_DEVICE','cpu'),compute_type=os.environ.get('ATELIER_WHISPER_COMPUTE','int8'),local_files_only=True)
-            segments,_=model.transcribe(path,language='fr',vad_filter=True)
+            segments,_=model.transcribe(path,language='fr',vad_filter=True,initial_prompt=os.environ.get('ATELIER_DICTATION_VOCABULARY') or None)
             return ' '.join(s.text.strip() for s in segments)
         pipe.send((process_job(job,chat,transcribe),None))
     except Exception:
@@ -150,7 +150,7 @@ class Runner:
             self.child.join()
         if self.receiver: self.receiver.close()
         self.child=None; self.receiver=None; self.completed=None; self.job=None
-    def tick(self):
+    def tick(self, allow_claim=True):
         if self.child:
             # Inspect completion locally, without adding a network round trip first.
             if self.completed is None:
@@ -169,6 +169,7 @@ class Runner:
                 self.gateway.rpc('worker_heartbeat',{'p_capabilities':self.current_capabilities()})
                 self.last_heartbeat=time.monotonic()
             return 0.25
+        if not allow_claim: return self.interval
         result=self.gateway.rpc('worker_poll',{'p_capabilities':self.current_capabilities()})
         self.last_heartbeat=time.monotonic()
         if result:
@@ -180,16 +181,7 @@ class Runner:
         return self.interval
 
 def main():
-    runner=Runner(Gateway(),mp.get_context('spawn'))
-    print('Atelier PC : connexion sortante uniquement. Ctrl+C pour arrêter.',flush=True)
-    try:
-        while True:
-            try: delay=runner.tick()
-            except Exception:
-                print('Connexion ou configuration indisponible. Nouvelle tentative dans 10 secondes.',flush=True)
-                delay=10
-            time.sleep(delay)
-    except KeyboardInterrupt: pass
-    finally: runner.cleanup()
+    from atelier_service import main as serve
+    serve()
 
 if __name__=='__main__': main()

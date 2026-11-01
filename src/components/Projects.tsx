@@ -1,3 +1,4 @@
+import { ProjectRepository, TicketExecution } from './Execution'
 import { Assistant } from './Assistant'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -377,6 +378,7 @@ export function Board({
         </div>
       </header>
       {project.description && <p className="board-description">{project.description}</p>}
+      <ProjectRepository project={project} enabled={assistantEnabled} />
       <Assistant
         enabled={assistantEnabled}
         searchDocs={tickets.map((t) => ({ id: t.id, title: t.title, content: t.description }))}
@@ -637,6 +639,13 @@ export function Board({
                           </button>
                         ))}
                       </div>
+                      <TicketExecution
+                        ticket={ticket}
+                        tickets={tickets}
+                        enabled={assistantEnabled}
+                        compact
+                        onOpen={() => onEditTicket(ticket)}
+                      />
                       <div className="ticket-footer">
                         <span
                           className={`difficulty difficulty-${ticket.difficulty}`}

@@ -37,3 +37,15 @@ Le tableau précédent garde la photographie du 31 octobre. La nouvelle référe
 | Pas de nouvel exécuteur de développement dans ces trois commits | Service local texte/audio/recherche, toujours sans exécuteur de code | Aucun des deux projets examinés ne propose encore une équipe d’agents qui développe les tickets automatiquement. |
 
 L’intérêt d’Atelier reste son adaptation au PC personnel et ses contrôles de synchronisation. La référence aurait aussi constitué une base raisonnable à reprendre ; cette comparaison ne prétend pas établir une supériorité globale d’ergonomie ou de fiabilité en production.
+
+## Extension V1.2 — traitements locaux et Run
+
+Comparaison avec le code de référence déjà inspecté au commit `c5c77f9`, pas une affirmation sur ses éventuels changements ultérieurs.
+
+| Point | Atelier V1.2 | Référence inspectée | Pourquoi / avantage |
+| --- | --- | --- | --- |
+| Exécution de tickets | Une session Codex locale, dépôt autorisé par projet, compte rendu et validation humaine | Pas d’exécuteur de tickets identifié dans la révision examinée | Atelier apporte le protocole et les scripts ; l’exécution réelle reste à activer/tester après Supabase et correction du sandbox. |
+| Modèles sur ce PC | Qwen3.5 4B et Whisper small installés, inférences testées | Pas de comparaison sur ce matériel | L’installation est vérifiée ; aucune supériorité générale de qualité revendiquée. |
+| Réception des demandes | WebSocket sortant et file durable, sans ports entrants Internet | Comparaison réseau complète non effectuée | Choix Atelier pour le lien PC/mobile demandé ; pas de classement sans mesure équivalente. |
+| Fin d’un ticket | In progress → À valider → Done humain | Pas d’automatisation de développement identifiée | Atelier conserve la décision de clôture et de fusion au propriétaire. |
+| Maturité connectée | Tests SQL, processus et navigateur, mais connexion Supabase réelle encore absente | Maturité réelle non mesurée sur les mêmes appareils | Aucun gagnant global établi : l’activation et les essais réels restent indispensables. |

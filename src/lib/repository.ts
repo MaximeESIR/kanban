@@ -144,9 +144,9 @@ export function createRemoteRepository(ownerId: string): Repository {
         )
       if (!schemaVerified) {
         const version = await client.rpc('atelier_schema_version')
-        if (version.error || typeof version.data !== 'number' || version.data < 4)
+        if (version.error || typeof version.data !== 'number' || version.data < 5)
           throw new Error(
-            'La base Supabase doit être mise à jour : appliquez les migrations 001 à 004 du dépôt, dans l’ordre, puis rechargez Atelier.',
+            'La base Supabase doit être mise à jour : appliquez les migrations 001 à 005 du dépôt, dans l’ordre, puis rechargez Atelier.',
           )
         schemaVerified = true
       }
