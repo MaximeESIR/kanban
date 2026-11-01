@@ -1,5 +1,7 @@
 # Atelier — V1.2
 
+**Pour Maxime : [ce que tu dois faire toi-même, étape par étape](docs/CONNEXION-PC.md).** Les installations déjà réalisées et les explications techniques sont séparées des actions restantes.
+
 Application personnelle de projets, kanban et notes. Interface React / TypeScript adaptée à l’ordinateur et au téléphone, déployable sur GitHub Pages. Supabase assure l’authentification et le stockage privé. Un service local reçoit les demandes et peut lancer une session Codex par ticket, après autorisation du dépôt et vérification de son isolation.
 
 ## V1.0 : application installable et assistant PC

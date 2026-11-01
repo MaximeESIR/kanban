@@ -57,3 +57,9 @@ Sans projet Supabase et sans moteur installé/configuré sur le PC, nous ne pouv
 - Service `atelier-ollama` activé sur ce PC. Service `atelier-worker` et configuration privée préparés mais non démarrés : les quatre paramètres Supabase manquent. Le dépôt Atelier est enregistré localement. Aucun secret ni modèle téléchargé n’est commité.
 - Reste à prouver : Supabase réel/TOTP, liaison entre appareils physiques, sandbox corrigé et une vraie tâche Codex. Les tests avec serveur/exécuteur simulés ne remplacent pas ces vérifications. Guide mis à jour avec les étapes précises et les limites.
 - Validation locale V1.2 : **94 tests réussis** (43 Vitest, 23 Python, 20 parcours navigateur, 6 parcours connectés avec serveur simulé, 2 PWA de production), TypeScript et build réussis. Revue indépendante des chemins d’exécution et des contrôles SQL ; aucun nouveau blocage certain à l’inspection après corrections. Le précontrôle réseau utilise désormais un témoin loopback contrôlé, sans dépendre d’Internet.
+
+## 1er novembre 2026 — guide personnel simplifié
+
+- À la demande du propriétaire, remplacement de l’entrée du guide par six étapes repliables avec destination, action précise et résultat attendu. Seule la création du projet est ouverte au départ ; les explications techniques restent disponibles dans un bloc séparé.
+- Distinction entre site privé (étapes 1–4), connexion PC (5–6), installations déjà faites et essais réels restant à mener avec assistance. Liens directs vers les fichiers SQL, les variables GitHub et le workflow ; correspondance exacte des quatre valeurs privées à remplir.
+- Suppression de la modification manuelle du workflow pour activer Supabase : la présence des deux variables désactive déjà la démo. Vérification des libellés de l’application et des sources officielles Supabase/Codex, contrôle des liens locaux et du rendu Markdown. Aucun changement du fonctionnement de l’application.
