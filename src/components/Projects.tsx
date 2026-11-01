@@ -19,6 +19,9 @@ import {
   dateLabel,
   difficulties,
   isBlocked,
+  prerequisiteIds,
+  nestedTickets,
+  sortTickets,
   matchesSearch,
   priorities,
   statuses,
@@ -46,6 +49,13 @@ export function Projects({
   const [query, setQuery] = useState(''),
     [sort, setSort] = useState('recent')
   const [allIssues, setAllIssues] = useState(false)
+  const [ticketSort, setTicketSort] = useState<'priority' | 'recent'>(() => {
+    try {
+      return localStorage.getItem('atelier-ticket-sort') === 'recent' ? 'recent' : 'priority'
+    } catch {
+      return 'priority'
+    }
+  })
   const filtered = projects
     .filter((p) => matchesSearch(query, p.name, p.description))
     .sort((a, b) =>
@@ -202,34 +212,45 @@ export function Projects({
       </button>
       {allIssues && (
         <section className="all-issues" aria-label="Tous les tickets">
-          {[...tickets]
-            .sort(
-              (a, b) =>
-                ['urgent', 'high', 'medium', 'low'].indexOf(a.priority) -
-                  ['urgent', 'high', 'medium', 'low'].indexOf(b.priority) ||
-                a.project_id.localeCompare(b.project_id),
-            )
-            .map((t) => (
-              <article key={t.id} className="search-hit">
-                <button className="text-button" onClick={() => onTicket(t)}>
-                  {t.title}
-                </button>
-                <small>
-                  {projects.find((p) => p.id === t.project_id)?.name} · {priorities[t.priority]}
-                </small>
-                <select
-                  aria-label={`Statut global ${t.title}`}
-                  value={t.status}
-                  onChange={(e) => onMoveTicket(t, e.target.value as Status)}
-                >
-                  {statuses.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </article>
-            ))}
+          <label className="sort-control">
+            Trier tous les tickets
+            <select
+              value={ticketSort}
+              onChange={(e) => {
+                const next = e.target.value as 'priority' | 'recent'
+                setTicketSort(next)
+                try {
+                  localStorage.setItem('atelier-ticket-sort', next)
+                } catch {
+                  /* Preference only. */
+                }
+              }}
+            >
+              <option value="priority">Priorité</option>
+              <option value="recent">Dernière modification</option>
+            </select>
+          </label>
+          {sortTickets(tickets, ticketSort).map((t) => (
+            <article key={t.id} className="search-hit">
+              <button className="text-button" onClick={() => onTicket(t)}>
+                {t.title}
+              </button>
+              <small>
+                {projects.find((p) => p.id === t.project_id)?.name} · {priorities[t.priority]}
+              </small>
+              <select
+                aria-label={`Statut global ${t.title}`}
+                value={t.status}
+                onChange={(e) => onMoveTicket(t, e.target.value as Status)}
+              >
+                {statuses.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </article>
+          ))}
         </section>
       )}
       <p className="page-footnote">Les grandes idées avancent à petits pas.</p>
@@ -290,7 +311,12 @@ export function Board({
         )
       const status = hit?.closest<HTMLElement>('[data-column]')?.dataset.column as
         Status | undefined
-      if (target && target.id !== ticket.id && target.status === ticket.status)
+      if (
+        target &&
+        target.id !== ticket.id &&
+        target.status === ticket.status &&
+        target.parent_id === ticket.parent_id
+      )
         onReorder(ticket, (target.position || 0) - 0.5)
       else if (status && status !== ticket.status && statuses.some((s) => s.id === status))
         onMove(ticket, status)
@@ -439,9 +465,14 @@ export function Board({
       </nav>
       <div ref={boardRef} className="kanban">
         {statuses.map((status) => {
-          const items = selected
-            .filter((t) => t.status === status.id)
-            .sort((a, b) => (a.position || 0) - (b.position || 0) || a.number - b.number)
+          const rows = nestedTickets(
+            selected
+              .filter((t) => t.status === status.id)
+              .sort((a, b) => (a.position || 0) - (b.position || 0) || a.number - b.number),
+          )
+          const items = rows.map((r) => r.ticket)
+          const group = (t: Ticket) =>
+            items.some((x) => x.id === t.parent_id) ? t.parent_id : null
           return (
             <section
               key={status.id}
@@ -481,13 +512,20 @@ export function Board({
                 </button>
               </div>
               <div className="column-content">
-                {items.map((ticket, ticketIndex) => {
+                {rows.map(({ ticket, depth }) => {
                   const blocked = isBlocked(ticket, tickets),
-                    dependency = tickets.find((t) => t.id === ticket.depends_on_id)
+                    dependencies = tickets.filter((t) => prerequisiteIds(ticket).includes(t.id)),
+                    completed = dependencies.filter((t) => t.status === 'done').length,
+                    parent = tickets.find((t) => t.id === ticket.parent_id),
+                    children = tickets.filter((t) => t.parent_id === ticket.id),
+                    siblings = items.filter((t) => group(t) === group(ticket)),
+                    siblingIndex = siblings.findIndex((t) => t.id === ticket.id)
                   return (
                     <article
                       key={ticket.id}
                       data-ticket-id={ticket.id}
+                      data-depth={depth}
+                      style={{ marginInlineStart: depth * 12 }}
                       className={`ticket-card ${dragging === ticket.id ? 'dragging' : ''} ${ticket.status === 'done' ? 'completed' : ''}`}
                       draggable={!busy}
                       onDragStart={(e) => {
@@ -504,9 +542,9 @@ export function Board({
                         <button
                           className="icon-button"
                           aria-label={`Monter ${ticket.title}`}
-                          disabled={busy || ticketIndex === 0}
+                          disabled={busy || siblingIndex === 0}
                           onClick={() =>
-                            onReorder(ticket, (items[ticketIndex - 1]?.position || 0) - 1)
+                            onReorder(ticket, (siblings[siblingIndex - 1]?.position || 0) - 1)
                           }
                         >
                           ↑
@@ -514,9 +552,9 @@ export function Board({
                         <button
                           className="icon-button"
                           aria-label={`Descendre ${ticket.title}`}
-                          disabled={busy || ticketIndex === items.length - 1}
+                          disabled={busy || siblingIndex === siblings.length - 1}
                           onClick={() =>
-                            onReorder(ticket, (items[ticketIndex + 1]?.position || 0) + 1)
+                            onReorder(ticket, (siblings[siblingIndex + 1]?.position || 0) + 1)
                           }
                         >
                           ↓
@@ -565,16 +603,40 @@ export function Board({
                         <h3>{ticket.title}</h3>
                         {ticket.description && <p>{ticket.description}</p>}
                       </button>
-                      {dependency && (
+                      {parent && (
                         <button
-                          className={`dependency-chip ${blocked ? 'blocked' : 'resolved'}`}
-                          onClick={() => onEditTicket(dependency)}
-                          title={dependency.title}
+                          className="text-button ticket-parent"
+                          onClick={() => onEditTicket(parent)}
                         >
-                          <Link2 size={13} />
-                          {blocked ? 'Dépend de' : 'Dépendance terminée'} #{dependency.number}
+                          Sous-ticket de #{parent.number} — {parent.title}
                         </button>
                       )}
+                      {children.length > 0 && (
+                        <p className="relation-state">
+                          Sous-tickets : {children.filter((t) => t.status === 'done').length}/
+                          {children.length} terminés
+                        </p>
+                      )}
+                      {dependencies.length > 0 && (
+                        <p className={`relation-state ${blocked ? 'blocked' : 'resolved'}`}>
+                          {blocked ? 'Bloqué' : 'Prêt'} · {completed}/{dependencies.length}{' '}
+                          prérequis terminés
+                        </p>
+                      )}
+                      <div className="dependency-chips">
+                        {dependencies.map((dependency) => (
+                          <button
+                            key={dependency.id}
+                            className={`dependency-chip ${dependency.status !== 'done' ? 'blocked' : 'resolved'}`}
+                            onClick={() => onEditTicket(dependency)}
+                            title={dependency.title}
+                          >
+                            <Link2 size={13} />
+                            {dependency.status !== 'done' ? 'Dépend de' : 'Dépendance terminée'} #
+                            {dependency.number}
+                          </button>
+                        ))}
+                      </div>
                       <div className="ticket-footer">
                         <span
                           className={`difficulty difficulty-${ticket.difficulty}`}

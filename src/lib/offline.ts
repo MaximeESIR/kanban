@@ -1,5 +1,12 @@
 import { get, set, del } from 'idb-keyval'
-import { type Data, type ProjectInput, type TicketInput, type NoteInput } from '../domain'
+import {
+  type Data,
+  type ProjectInput,
+  type TicketInput,
+  type NoteInput,
+  ticketLinks,
+  unlinkTicket,
+} from '../domain'
 import { type Repository } from './repository'
 import { supabase } from './supabase'
 export type Op = {
@@ -43,6 +50,18 @@ export function offlineRepository(owner: string, remote: Repository): Repository
       })
       if (error) {
         if (!navigator.onLine || /fetch|network/i.test(error.message)) break
+        // A prerequisite/project may have been deleted by another device while offline.
+        // Preserve that edit for recovery, without blocking every subsequent mutation.
+        if (['23503', '23514', '23505', '22023', '22P02', 'P0001'].includes(error.code)) {
+          s.conflicts.push({
+            at: new Date().toISOString(),
+            table: op.table,
+            values: { ...op.values, id: op.id, _rejected: error.message },
+          })
+          s.ops.shift()
+          await save(s)
+          continue
+        }
         throw error
       }
       if (r.conflict)
@@ -86,6 +105,7 @@ export function offlineRepository(owner: string, remote: Repository): Repository
     values: Record<string, unknown>,
     id?: string,
     remove = false,
+    expectedVersion?: string,
   ) {
     return lock(async () => {
       const s = await read()
@@ -93,6 +113,10 @@ export function offlineRepository(owner: string, remote: Repository): Repository
       const rows = s.data[table] as any[]
       const old = rows.find((x) => x.id === id)
       if (id && !old) throw new Error('Cet élément a été supprimé.')
+      if (expectedVersion && old?.updated_at !== expectedVersion)
+        throw new Error(
+          'Ce ticket a changé depuis son ouverture. Votre brouillon est conservé ; rouvrez le ticket pour comparer ou créez une copie.',
+        )
       const now = new Date().toISOString()
       const row = {
         ...old,
@@ -111,7 +135,7 @@ export function offlineRepository(owner: string, remote: Repository): Repository
         id: row.id,
         base: old?.updated_at || null,
         remove,
-        values,
+        values: remove ? { ...old } : values,
       }
       if (prior) op.base = old?.updated_at || null
       s.ops.push(op)
@@ -122,13 +146,8 @@ export function offlineRepository(owner: string, remote: Repository): Repository
           : [...rows, row]
       if (remove && table === 'projects')
         s.data.tickets = s.data.tickets.filter((x) => x.project_id !== id)
-      if (remove && (table === 'tickets' || table === 'projects'))
-        s.data.tickets = s.data.tickets.map((x) => ({
-          ...x,
-          depends_on_id: s.data.tickets.some((t) => t.id === x.depends_on_id)
-            ? x.depends_on_id
-            : null,
-        }))
+      if (remove && table === 'tickets')
+        s.data.tickets = s.data.tickets.map((x) => unlinkTicket(x, id!))
       await save(s)
       // Updates remain local until the next background flush; UI never waits for the network.
       return row
@@ -137,7 +156,8 @@ export function offlineRepository(owner: string, remote: Repository): Repository
   return {
     load,
     project: (v: ProjectInput, id) => mutate('projects', v, id),
-    ticket: (v: TicketInput, id) => mutate('tickets', v, id),
+    ticket: (v: TicketInput, id, expectedVersion) =>
+      mutate('tickets', ticketLinks(v), id, false, expectedVersion),
     note: (v: NoteInput, id) => mutate('notes', v, id),
     remove: async (t, id) => {
       await mutate(t, {}, id, true)
@@ -170,7 +190,11 @@ export async function recoverConflicts(owner: string) {
         now = new Date().toISOString()
       const values = {
         title: `Copie conflit — ${String(v.title || v.name || conflict.table)}`.slice(0, 160),
-        content: String(v.content || v.description || JSON.stringify(v, null, 2)).slice(0, 2000000),
+        content:
+          `${v._rejected ? `Modification refusée : ${String(v._rejected)}\n\n` : ''}${String(v.content || v.description || JSON.stringify(v, null, 2))}`.slice(
+            0,
+            2000000,
+          ),
         category: 'pro' as const,
       }
       s.data.notes.push({ ...values, id, owner_id: owner, created_at: now, updated_at: now })

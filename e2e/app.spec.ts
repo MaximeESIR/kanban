@@ -21,7 +21,7 @@ async function createTicket(page: Page, title: string, depends = false) {
   await dialog.getByLabel('Description').fill('Un ticket vérifié dans le navigateur.')
   await dialog.getByRole('combobox', { name: 'Priorité', exact: true }).selectOption('high')
   await dialog.getByRole('combobox', { name: 'Difficulté', exact: true }).selectOption('hard')
-  if (depends) await dialog.getByLabel('Dépend d’un autre ticket').selectOption({ index: 1 })
+  if (depends) await dialog.getByRole('checkbox').first().check()
   await dialog.getByRole('button', { name: 'Créer le ticket', exact: true }).click()
   await expect(dialog).not.toBeVisible()
 }
@@ -101,9 +101,7 @@ test('projects and tickets: create, edit, move, dependencies, deletion', async (
   ).toBeVisible()
   await expect(second.getByRole('button', { name: /Dépendance terminée/ })).toBeVisible()
   await first.locator('.ticket-open').click()
-  await expect(
-    page.getByRole('dialog').getByLabel('Dépend d’un autre ticket').getByRole('option'),
-  ).toHaveCount(1)
+  await expect(page.getByRole('dialog').getByRole('checkbox')).toHaveCount(0)
   await page.getByRole('dialog').getByLabel('Titre du ticket').fill('Première étape terminée')
   await page.getByRole('dialog').getByRole('button', { name: 'Enregistrer', exact: true }).click()
   await page.reload()

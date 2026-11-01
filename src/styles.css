@@ -3532,3 +3532,90 @@ svg {
 .diagram-source svg {
   cursor: zoom-in;
 }
+
+.ticket-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+.prerequisites {
+  border: 1px solid var(--line, #dce4db);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+.prerequisites legend {
+  font-weight: 600;
+  padding: 0 6px;
+}
+.prerequisite-list {
+  display: grid;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+.prerequisite-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px;
+  cursor: pointer;
+}
+.prerequisite-option input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+.prerequisite-option span {
+  overflow-wrap: anywhere;
+}
+.ticket-relations,
+.draft-recovery {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line, #dce4db);
+  border-radius: 12px;
+}
+.draft-recovery > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.draft-recovery small {
+  flex-basis: 100%;
+}
+.relation-link {
+  text-align: left;
+  min-height: 40px;
+}
+.relation-state {
+  font-size: 12px;
+  margin: 8px 0;
+}
+.relation-state.resolved {
+  color: var(--green-dark);
+}
+.ticket-parent {
+  font-size: 12px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.dependency-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-height: 110px;
+  overflow-y: auto;
+}
+.all-issues > .sort-control {
+  justify-self: start;
+  margin-bottom: 10px;
+  gap: 12px;
+}

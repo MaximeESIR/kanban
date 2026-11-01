@@ -30,6 +30,9 @@ import { Brand, EmptyState, ProjectIcon, Spinner } from './components/ui'
 import {
   emptyData,
   validateTicket,
+  isBlocked,
+  prerequisiteIds,
+  unlinkTicket,
   type Data,
   type Note,
   type NoteInput,
@@ -42,12 +45,13 @@ import {
 import { DEMO_EMAIL, DEMO_OWNER, DEMO_SESSION } from './lib/demo'
 import { demoEnabled, friendlyError, supabase } from './lib/supabase'
 import { createDemoRepository, createRemoteRepository, type Repository } from './lib/repository'
+import { clearTicketDrafts, listTicketDrafts, removeTicketDraft } from './lib/ticketDrafts'
 
 type Identity = { id: string; email: string; demo: boolean }
 type Route = { view: 'projects' | 'notes'; project?: string; note?: string }
 type Dialog =
   | { kind: 'project'; project?: Project }
-  | { kind: 'ticket'; project: Project; ticket?: Ticket; status?: Status }
+  | { kind: 'ticket'; project: Project; ticket?: Ticket; status?: Status; parent?: string }
   | {
       kind: 'delete'
       entity: 'projects' | 'tickets' | 'notes'
@@ -135,6 +139,7 @@ export default function App() {
       if (identity) await clearOffline(identity.id)
       setIdentity(null)
     }
+    if (identity) clearTicketDrafts(identity.id)
     finishRecovery()
   }
   if (loading)
@@ -330,14 +335,28 @@ function Workspace({
     announce(id ? 'Projet mis à jour.' : 'Votre nouveau projet est prêt.')
     if (!id) navigate({ view: 'projects', project: saved.id })
   }
-  async function saveTicket(input: TicketInput, id?: string, quiet = false) {
+  async function saveTicket(
+    input: TicketInput,
+    id?: string,
+    quiet = false,
+    expectedVersion?: string,
+  ) {
     validateTicket(input, data.tickets, id)
-    const saved = await action(() => repo.ticket(input, id))
+    const saved = await action(() => repo.ticket(input, id, expectedVersion))
     setData((d) => ({
       ...d,
       tickets: id ? d.tickets.map((t) => (t.id === id ? saved : t)) : [...d.tickets, saved],
     }))
-    if (!quiet) announce(id ? 'Ticket mis à jour.' : 'Ticket ajouté au projet.')
+    const next = data.tickets.map((t) => (t.id === id ? saved : t))
+    const ready = data.tickets.filter(
+      (t) => t.status !== 'done' && isBlocked(t, data.tickets) && !isBlocked(t, next),
+    )
+    if (!quiet)
+      announce(
+        (id ? 'Ticket mis à jour.' : 'Ticket ajouté au projet.') +
+          (ready.length ? ` Prêt(s) : ${ready.map((t) => t.title).join(', ')}.` : ''),
+      )
+    return saved
   }
   async function moveTicket(ticket: Ticket, status: Status) {
     try {
@@ -349,12 +368,22 @@ function Workspace({
           priority: ticket.priority,
           difficulty: ticket.difficulty,
           depends_on_id: ticket.depends_on_id,
+          prerequisite_ids: prerequisiteIds(ticket),
+          parent_id: ticket.parent_id,
+          position: ticket.position,
           status,
         },
         ticket.id,
         true,
       )
-      announce(`« ${ticket.title} » déplacé.`)
+      const next = data.tickets.map((t) => (t.id === ticket.id ? { ...t, status } : t))
+      const ready = data.tickets.filter(
+        (t) => t.status !== 'done' && isBlocked(t, data.tickets) && !isBlocked(t, next),
+      )
+      announce(
+        `« ${ticket.title} » déplacé.` +
+          (ready.length ? ` Prêt(s) : ${ready.map((t) => t.title).join(', ')}.` : ''),
+      )
     } catch (err) {
       announce(friendlyError(err), true)
     }
@@ -473,6 +502,14 @@ function Workspace({
       await noteFlights.current.get(id)?.catch(() => {})
     }
     await action(() => repo.remove(entity, id))
+    if (entity === 'tickets' || entity === 'projects') {
+      for (const draft of listTicketDrafts(identity.id))
+        if (
+          (entity === 'tickets' && draft.ticket === id) ||
+          (entity === 'projects' && draft.project === id)
+        )
+          removeTicketDraft(identity.id, draft.id)
+    }
     setData((d) => {
       if (entity === 'projects')
         return {
@@ -483,9 +520,7 @@ function Workspace({
       if (entity === 'tickets')
         return {
           ...d,
-          tickets: d.tickets
-            .filter((t) => t.id !== id)
-            .map((t) => (t.depends_on_id === id ? { ...t, depends_on_id: null } : t)),
+          tickets: d.tickets.filter((t) => t.id !== id).map((t) => unlinkTicket(t, id)),
         }
       return { ...d, notes: d.notes.filter((n) => n.id !== id) }
     })
@@ -501,6 +536,7 @@ function Workspace({
   function exportData() {
     const snapshot = {
       ...data,
+      ticket_drafts: listTicketDrafts(identity.id),
       notes: data.notes.map((n) => ({ ...n, ...drafts.current.get(n.id) })),
     }
     const url = URL.createObjectURL(
@@ -846,13 +882,18 @@ function Workspace({
       {dialog?.kind === 'ticket' && (
         <TicketForm
           assistantEnabled={!identity.demo}
-          key={dialog.ticket?.id || 'new'}
-          ticket={dialog.ticket}
+          key={dialog.ticket?.id || `new:${dialog.project.id}:${dialog.parent || ''}`}
+          ticket={data.tickets.find((t) => t.id === dialog.ticket?.id) || dialog.ticket}
           project={dialog.project}
           tickets={data.tickets}
           initialStatus={dialog.status}
+          initialParent={dialog.parent}
           onClose={() => setDialog(null)}
-          onSave={saveTicket}
+          onSave={(input, id, version) => saveTicket(input, id, false, version)}
+          onOpen={(ticket) => setDialog({ kind: 'ticket', ticket, project: dialog.project })}
+          onNewChild={(ticket) =>
+            setDialog({ kind: 'ticket', parent: ticket.id, project: dialog.project })
+          }
           onDelete={() => {
             if (dialog.ticket) confirmDelete('tickets', dialog.ticket)
           }}

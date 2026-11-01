@@ -130,34 +130,66 @@ def capabilities():
         if importlib.util.find_spec('faster_whisper') and Path(os.environ['ATELIER_WHISPER_MODEL']).is_dir():caps.append('transcribe')
     return caps
 
+def poll_seconds():
+    value = float(os.environ.get('ATELIER_POLL_SECONDS', '2'))
+    if not 1 <= value <= 30: raise ValueError('ATELIER_POLL_SECONDS must be between 1 and 30')
+    return value
+
+class Runner:
+    def __init__(self, gateway, ctx):
+        self.gateway=gateway; self.ctx=ctx; self.child=None; self.receiver=None; self.job=None
+        self.started=0; self.completed=None; self.last_heartbeat=0
+        self.caps=[]; self.caps_at=float('-inf'); self.interval=poll_seconds()
+    def current_capabilities(self):
+        if time.monotonic()-self.caps_at>=30:
+            self.caps=capabilities(); self.caps_at=time.monotonic()
+        return self.caps
+    def cleanup(self):
+        if self.child and self.child.pid is not None:
+            if self.child.is_alive(): self.child.terminate()
+            self.child.join()
+        if self.receiver: self.receiver.close()
+        self.child=None; self.receiver=None; self.completed=None; self.job=None
+    def tick(self):
+        if self.child:
+            # Inspect completion locally, without adding a network round trip first.
+            if self.completed is None:
+                if self.receiver.poll():
+                    try: self.completed=self.receiver.recv()
+                    except EOFError: self.completed=(None,'Le moteur local s’est interrompu sans résultat.')
+                elif time.monotonic()-self.started>240 or not self.child.is_alive():
+                    self.completed=(None,'Délai dépassé ou moteur arrêté.')
+            if self.completed is not None:
+                output,error=self.completed
+                accepted=self.gateway.rpc('worker_finish',{'p_id':self.job['id'],'p_lease':self.job['lease'],'p_result':output,'p_error':error})
+                self.cleanup()
+                print('Traitement terminé.' if accepted else 'Résultat annulé ou expiré.',flush=True)
+                return 0.1
+            if time.monotonic()-self.last_heartbeat>=10:
+                self.gateway.rpc('worker_heartbeat',{'p_capabilities':self.current_capabilities()})
+                self.last_heartbeat=time.monotonic()
+            return 0.25
+        result=self.gateway.rpc('worker_poll',{'p_capabilities':self.current_capabilities()})
+        self.last_heartbeat=time.monotonic()
+        if result:
+            self.job=result; self.receiver,sender=self.ctx.Pipe(duplex=False)
+            self.child=self.ctx.Process(target=execute,args=(self.job,sender))
+            self.child.start();sender.close();self.started=time.monotonic()
+            print('Traitement démarré : '+self.job['kind'],flush=True)
+            return 0.25
+        return self.interval
+
 def main():
-    gateway=Gateway(); ctx=mp.get_context('spawn'); child=None; receiver=None; job=None; started=0; completed=None
+    runner=Runner(Gateway(),mp.get_context('spawn'))
     print('Atelier PC : connexion sortante uniquement. Ctrl+C pour arrêter.',flush=True)
     try:
         while True:
-            try:
-                result=gateway.rpc('worker_poll',{'p_capabilities':capabilities()})
-                if result and child is None:
-                    job=result; receiver,sender=ctx.Pipe(duplex=False);child=ctx.Process(target=execute,args=(job,sender));child.start();sender.close();started=time.monotonic()
-                    print('Traitement démarré : '+job['kind'],flush=True)
-                if child:
-                    if completed is not None:
-                        output,error=completed
-                    elif receiver.poll():
-                        output,error=receiver.recv()
-                    elif time.monotonic()-started>240 or not child.is_alive():
-                        output,error=None,'Délai dépassé ou moteur arrêté.'
-                    else: time.sleep(2);continue
-                    completed=(output,error)
-                    gateway.rpc('worker_finish',{'p_id':job['id'],'p_lease':job['lease'],'p_result':output,'p_error':error})
-                    if child.is_alive():child.terminate()
-                    child.join();receiver.close();child=None;completed=None
-                    print('Traitement terminé.',flush=True)
+            try: delay=runner.tick()
             except Exception:
                 print('Connexion ou configuration indisponible. Nouvelle tentative dans 10 secondes.',flush=True)
-            time.sleep(10)
+                delay=10
+            time.sleep(delay)
     except KeyboardInterrupt: pass
-    finally:
-        if child and child.is_alive():child.terminate();child.join()
+    finally: runner.cleanup()
 
 if __name__=='__main__': main()

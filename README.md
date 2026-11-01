@@ -1,4 +1,4 @@
-# Atelier — V1.0
+# Atelier — V1.1
 
 Application personnelle de projets, kanban et notes. Interface React / TypeScript adaptée à l’ordinateur et au téléphone, déployable sur GitHub Pages. Supabase assure l’authentification et le stockage privé. Aucune exécution de code ni aucun agent de développement n’est intégré.
 
@@ -11,6 +11,15 @@ Application personnelle de projets, kanban et notes. Interface React / TypeScrip
 La version en ligne reste une démo tant que Supabase n’est pas configuré. Les boutons IA sont visibles mais désactivés : aucune simulation ne se fait passer pour un résultat de votre PC. Une fois connecté, le service Python réalise les traitements locaux et le navigateur récupère les résultats sans rechargement.
 
 Sur Android, ouvrir le site puis « Installer l’application » (ou le menu Chrome). Sur iPhone, ouvrir avec Safari puis Partager → Sur l’écran d’accueil. La première ouverture en ligne télécharge les fichiers nécessaires au mode hors connexion. Il s’agit d’une PWA, pas d’un binaire distribué sur les stores.
+
+## V1.1 : relations entre tickets et brouillons
+
+- Un parent regroupe les sous-tickets ; des prérequis multiples déterminent séparément si un ticket est prêt. Le même prérequis peut servir à plusieurs tickets. Compteurs, navigation entre relations et indentation dans une même colonne.
+- Vue globale triable par priorité ou dernière modification, préférence conservée sur l’appareil.
+- Brouillon local à chaque saisie, sauvegarde des tickets existants à la fermeture et au passage en arrière-plan, récupération après interruption. Une fiche devenue obsolète ne peut pas écraser un autre changement ; le brouillon peut être copié dans un nouveau ticket.
+- Le PC vérifie les nouvelles demandes toutes les deux secondes ; une annulation pendant le calcul ne lui fait pas prendre une seconde demande prématurément.
+
+**Mise à jour Supabase :** appliquer aussi `003_ticket_relations.sql` et `004_worker_heartbeat.sql`. Une base trop ancienne est signalée avant l’ouverture de l’espace. [État du projet, étapes manuelles et trajet d’une dictée](docs/CONNEXION-PC.md).
 
 ## Version en ligne temporaire
 
@@ -50,7 +59,7 @@ Sur une adresse publique, la démo nécessite `VITE_PUBLIC_DEMO=true` au moment 
 - Liste des projets, nombre total de tickets par projet, progression, recherche et tri.
 - Création, modification et suppression des projets.
 - Kanban **To do / In progress / Done**, déplacement par glisser-déposer sur ordinateur et menu de statut utilisable au clavier et sur téléphone.
-- Tickets : titre, description, priorité, difficulté et dépendance facultative vers un ticket du même projet. Les cycles sont interdits dans l’interface et dans la base. Une dépendance inachevée est signalée sans empêcher de déplacer le ticket.
+- Tickets : titre, description, priorité, difficulté, parent facultatif et jusqu’à 50 prérequis du même projet. Les cycles sont interdits dans l’interface et dans la base. Les prérequis inachevés sont signalés sans empêcher de déplacer le ticket. La hiérarchie ne change pas automatiquement les statuts.
 - Notes avec recherche et enregistrement automatique après 700 ms d’inactivité. Changer d’écran n’annule pas l’enregistrement. Les erreurs de sauvegarde sont affichées ; la déconnexion attend la sauvegarde des notes.
 - Export JSON des projets, tickets et notes avec le bouton de téléchargement. L’import de sauvegardes n’est pas implémenté.
 - Actualisation à la reprise de la fenêtre et toutes les 3 secondes. Le bouton d’actualisation récupère immédiatement les changements d’un autre appareil.
@@ -63,7 +72,7 @@ Créer un projet Supabase dédié. Dans **SQL Editor**, exécuter une seule fois
 
 `supabase/migrations/001_atelier.sql`
 
-Puis exécuter `supabase/migrations/002_connected_workspace.sql`. Ces migrations créent les projets, tickets, notes, la file PC, la synchronisation et les règles RLS qui imposent désormais le TOTP. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API.
+Puis exécuter, dans l’ordre, `002_connected_workspace.sql`, `003_ticket_relations.sql` et `004_worker_heartbeat.sql` dans le même dossier. Ces migrations créent les projets, tickets, notes, la file PC, la synchronisation, les relations entre tickets et les règles RLS qui imposent le TOTP. Le schéma `private` contient la liste des comptes autorisés ; il ne doit pas être ajouté aux schémas exposés par la Data API.
 
 ### 2. Fermer les inscriptions et créer votre compte
 

@@ -18,7 +18,12 @@ beforeAll(async () => {
   await db.exec(
     `create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$; create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;grant usage on schema public,auth to anon,authenticated;insert into auth.users values('${A}'),('${B}'),('${W}');`,
   )
-  for (const name of ['001_atelier.sql', '002_connected_workspace.sql'])
+  for (const name of [
+    '001_atelier.sql',
+    '002_connected_workspace.sql',
+    '003_ticket_relations.sql',
+    '004_worker_heartbeat.sql',
+  ])
     await db.exec(
       await readFile(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8'),
     )
@@ -59,7 +64,9 @@ it('claims only owned jobs and rejects forged completion, unsupported actions an
   await as(B)
   expect((await db.query('select * from public.ai_jobs')).rows).toHaveLength(0)
   await expect(db.query("select public.worker_poll(array['rewrite'])")).rejects.toThrow()
+  await expect(db.query("select public.worker_heartbeat(array['rewrite'])")).rejects.toThrow()
   await as(W, 'aal1')
+  await db.query("select public.worker_heartbeat(array['rewrite'])")
   const claimed = (await db.query<{ job: any }>("select public.worker_poll(array['rewrite']) job"))
     .rows[0].job
   expect(claimed.id).toBe(id)
@@ -113,6 +120,7 @@ it('delivers a result, wipes request payload and revokes a worker immediately', 
   await db.query('update private.workers set enabled=false where user_id=$1', [W])
   await as(W)
   await expect(db.query("select public.worker_poll(array['rewrite'])")).rejects.toThrow()
+  await expect(db.query("select public.worker_heartbeat(array['rewrite'])")).rejects.toThrow()
   await db.exec('reset role')
   await db.query('update private.workers set enabled=true where user_id=$1', [W])
 })

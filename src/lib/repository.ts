@@ -8,6 +8,8 @@ import {
   type TicketInput,
   validateProject,
   validateTicket,
+  ticketLinks,
+  unlinkTicket,
 } from '../domain'
 import { DEMO_OWNER, DEMO_STORAGE, demoData } from './demo'
 import { supabase } from './supabase'
@@ -15,7 +17,7 @@ import { supabase } from './supabase'
 export interface Repository {
   load(): Promise<Data>
   project(input: ProjectInput, id?: string): Promise<Project>
-  ticket(input: TicketInput, id?: string): Promise<Ticket>
+  ticket(input: TicketInput, id?: string, expectedVersion?: string): Promise<Ticket>
   note(input: NoteInput, id?: string): Promise<Note>
   remove(kind: 'projects' | 'tickets' | 'notes', id: string): Promise<void>
 }
@@ -72,18 +74,22 @@ export function createDemoRepository(): Repository {
       write(data)
       return project
     },
-    async ticket(input, id) {
+    async ticket(input, id, expectedVersion) {
       const data = read()
       validateTicket(input, data.tickets, id)
       if (!data.projects.some((p) => p.id === input.project_id))
         throw new Error('Ce projet a été supprimé.')
       const existing = data.tickets.find((t) => t.id === id)
       if (id && !existing) throw new Error('Ce ticket a été supprimé.')
+      if (expectedVersion && existing?.updated_at !== expectedVersion)
+        throw new Error(
+          'Ce ticket a changé depuis son ouverture. Votre brouillon est conservé ; rouvrez le ticket pour comparer ou créez une copie.',
+        )
       const ticket: Ticket = {
         ...stamp(),
         number: Math.max(0, ...data.tickets.map((t) => t.number)) + 1,
         ...existing,
-        ...input,
+        ...ticketLinks(input),
         title: input.title.trim(),
         id: id || crypto.randomUUID(),
         updated_at: new Date().toISOString(),
@@ -118,9 +124,7 @@ export function createDemoRepository(): Repository {
         data.tickets = data.tickets.filter((t) => t.project_id !== id)
       }
       if (kind === 'tickets')
-        data.tickets = data.tickets
-          .filter((t) => t.id !== id)
-          .map((t) => (t.depends_on_id === id ? { ...t, depends_on_id: null } : t))
+        data.tickets = data.tickets.filter((t) => t.id !== id).map((t) => unlinkTicket(t, id))
       if (kind === 'notes') data.notes = data.notes.filter((n) => n.id !== id)
       write(data)
     },
@@ -129,6 +133,7 @@ export function createDemoRepository(): Repository {
 
 export function createRemoteRepository(ownerId: string): Repository {
   const client = supabase!
+  let schemaVerified = false
   return {
     async load() {
       const allowed = await client.rpc('can_access_atelier')
@@ -137,6 +142,14 @@ export function createRemoteRepository(ownerId: string): Repository {
         throw new Error(
           'Votre compte n’est pas autorisé. Ajoutez votre identifiant à la liste des propriétaires dans Supabase.',
         )
+      if (!schemaVerified) {
+        const version = await client.rpc('atelier_schema_version')
+        if (version.error || typeof version.data !== 'number' || version.data < 4)
+          throw new Error(
+            'La base Supabase doit être mise à jour : appliquez les migrations 001 à 004 du dépôt, dans l’ordre, puis rechargez Atelier.',
+          )
+        schemaVerified = true
+      }
       const results = await Promise.all([
         client.from('projects').select('*').order('created_at', { ascending: true }),
         client.from('tickets').select('*').order('number'),
@@ -162,12 +175,16 @@ export function createRemoteRepository(ownerId: string): Repository {
       if (error) throw error
       return data as Project
     },
-    async ticket(input, id) {
-      const values = { ...input, title: input.title.trim() }
+    async ticket(input, id, expectedVersion) {
+      const values = { ...ticketLinks(input), title: input.title.trim() }
+      let update = client
+        .from('tickets')
+        .update(values)
+        .eq('id', id || '')
+        .eq('owner_id', ownerId)
+      if (expectedVersion) update = update.eq('updated_at', expectedVersion)
       const { data, error } = await (
-        id
-          ? client.from('tickets').update(values).eq('id', id).eq('owner_id', ownerId)
-          : client.from('tickets').insert({ ...values, owner_id: ownerId })
+        id ? update : client.from('tickets').insert({ ...values, owner_id: ownerId })
       )
         .select()
         .single()

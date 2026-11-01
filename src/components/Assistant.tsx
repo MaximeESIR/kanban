@@ -49,9 +49,16 @@ export function usePC(enabled: boolean) {
     }
     void poll()
     const timer = setInterval(poll, 3000)
+    const refresh = () => void poll()
+    window.addEventListener('atelier-pc-refresh', refresh)
+    window.addEventListener('online', refresh)
+    window.addEventListener('focus', refresh)
     return () => {
       live = false
       clearInterval(timer)
+      window.removeEventListener('atelier-pc-refresh', refresh)
+      window.removeEventListener('online', refresh)
+      window.removeEventListener('focus', refresh)
     }
   }, [enabled])
   return { pcs, jobs, error }
@@ -101,7 +108,11 @@ export function Assistant({
     before = useRef(''),
     after = useRef('')
   const job = jobs.find((x) => x.id === id),
-    running = busy || job?.status === 'queued' || job?.status === 'running'
+    running =
+      busy ||
+      (Boolean(id) && !job && !connectionError) ||
+      job?.status === 'queued' ||
+      job?.status === 'running'
   useEffect(
     () => () => {
       cancelled.current = true
@@ -123,6 +134,7 @@ export function Assistant({
           context: { target: targetId, hash: await textHash(text || '') },
         }),
       )
+      window.dispatchEvent(new Event('atelier-pc-refresh'))
     } catch (e) {
       setError(friendlyError(e))
     } finally {
@@ -267,6 +279,9 @@ export function Assistant({
           </div>
           {recording && (
             <p role="status">Enregistrement en cours. L’audio sera transmis au PC à l’arrêt.</p>
+          )}
+          {id && !job && !connectionError && (
+            <p role="status">Demande transmise, en attente du PC…</p>
           )}
           {job && (
             <p role="status">

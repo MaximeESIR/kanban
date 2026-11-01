@@ -42,6 +42,9 @@ export interface Ticket {
   difficulty: Difficulty
   status: Status
   depends_on_id: string | null
+  /** Legacy records are read through prerequisiteIds until migrated. */
+  prerequisite_ids?: string[]
+  parent_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -70,6 +73,8 @@ export type TicketInput = Pick<
   | 'status'
   | 'depends_on_id'
   | 'position'
+  | 'prerequisite_ids'
+  | 'parent_id'
 >
 export type NoteInput = Pick<Note, 'title' | 'content' | 'category'>
 export const emptyData = (): Data => ({ projects: [], tickets: [], notes: [] })
@@ -93,20 +98,35 @@ export function validateTicket(input: TicketInput, tickets: Ticket[], id?: strin
     !Object.hasOwn(difficulties, input.difficulty)
   )
     throw new Error('Les propriétés du ticket sont invalides.')
-  if (!input.depends_on_id) return
-  const seen = new Set<string>(id ? [id] : [])
-  let next: string | null = input.depends_on_id
-  while (next) {
-    if (seen.has(next)) throw new Error('Cette dépendance créerait une boucle entre les tickets.')
-    seen.add(next)
-    const dependency = tickets.find((t) => t.id === next)
-    if (!dependency || dependency.project_id !== input.project_id)
-      throw new Error('La dépendance doit être un ticket de ce projet.')
-    next = dependency.depends_on_id
+  const ids = prerequisiteIds(input)
+  if (ids.length > 50 || new Set(ids).size !== ids.length)
+    throw new Error('Choisissez au maximum 50 prérequis distincts.')
+  const byId = new Map(tickets.map((t) => [t.id, t]))
+  const owner = id ? byId.get(id)?.owner_id : undefined
+  const walk = (start: string[], kind: 'parent' | 'prerequisite') => {
+    const seen = new Set<string>(),
+      pending = [...start]
+    while (pending.length) {
+      const next = pending.pop()!
+      if (next === id) throw new Error('Cette relation créerait une boucle entre les tickets.')
+      if (seen.has(next)) continue
+      seen.add(next)
+      const t = byId.get(next)
+      if (!t || t.project_id !== input.project_id || (owner && t.owner_id !== owner))
+        throw new Error('La relation doit être un ticket de ce projet.')
+      pending.push(...(kind === 'parent' ? (t.parent_id ? [t.parent_id] : []) : prerequisiteIds(t)))
+    }
   }
+  walk(ids, 'prerequisite')
+  walk(input.parent_id ? [input.parent_id] : [], 'parent')
 }
 
-export function dependencyOptions(tickets: Ticket[], projectId: string, ticketId?: string) {
+export function dependencyOptions(
+  tickets: Ticket[],
+  projectId: string,
+  ticketId?: string,
+  kind: 'parent' | 'prerequisite' = 'prerequisite',
+) {
   return tickets.filter((t) => {
     if (t.project_id !== projectId || t.id === ticketId) return false
     try {
@@ -118,7 +138,9 @@ export function dependencyOptions(tickets: Ticket[], projectId: string, ticketId
           status: 'todo',
           priority: 'medium',
           difficulty: 'medium',
-          depends_on_id: t.id,
+          depends_on_id: null,
+          prerequisite_ids: kind === 'prerequisite' ? [t.id] : [],
+          parent_id: kind === 'parent' ? t.id : null,
         },
         tickets,
         ticketId,
@@ -131,9 +153,65 @@ export function dependencyOptions(tickets: Ticket[], projectId: string, ticketId
 }
 
 export function isBlocked(ticket: Ticket, tickets: Ticket[]) {
-  return Boolean(
-    ticket.depends_on_id &&
-    tickets.some((t) => t.id === ticket.depends_on_id && t.status !== 'done'),
+  return prerequisiteIds(ticket).some((id) => tickets.find((t) => t.id === id)?.status !== 'done')
+}
+
+export function prerequisiteIds(ticket: Pick<Ticket, 'prerequisite_ids' | 'depends_on_id'>) {
+  return ticket.prerequisite_ids ?? (ticket.depends_on_id ? [ticket.depends_on_id] : [])
+}
+export function ticketLinks(input: TicketInput): TicketInput {
+  const ids = prerequisiteIds(input)
+  return {
+    ...input,
+    prerequisite_ids: ids,
+    depends_on_id: ids[0] || null,
+    parent_id: input.parent_id || null,
+  }
+}
+export function unlinkTicket(ticket: Ticket, removed: string): Ticket {
+  return {
+    ...ticket,
+    ...ticketLinks({
+      ...ticket,
+      prerequisite_ids: prerequisiteIds(ticket).filter((id) => id !== removed),
+      parent_id: ticket.parent_id === removed ? null : ticket.parent_id,
+    }),
+  }
+}
+/** Parent stays above its children when they share a column. Filtering never hides a child. */
+export function nestedTickets(tickets: Ticket[]) {
+  const byId = new Map(tickets.map((t) => [t.id, t])),
+    children = new Map<string, Ticket[]>()
+  for (const t of tickets)
+    if (t.parent_id && byId.has(t.parent_id))
+      children.set(t.parent_id, [...(children.get(t.parent_id) || []), t])
+  const rows: { ticket: Ticket; depth: number }[] = [],
+    seen = new Set<string>()
+  const visit = (root: Ticket, depth: number) => {
+    const stack = [{ ticket: root, depth }]
+    while (stack.length) {
+      const row = stack.pop()!
+      if (seen.has(row.ticket.id)) continue
+      seen.add(row.ticket.id)
+      rows.push({ ...row, depth: Math.min(row.depth, 2) })
+      for (const child of [...(children.get(row.ticket.id) || [])].reverse())
+        stack.push({ ticket: child, depth: row.depth + 1 })
+    }
+  }
+  for (const t of tickets) if (!t.parent_id || !byId.has(t.parent_id)) visit(t, 0)
+  for (const t of tickets) visit(t, 0)
+  return rows
+}
+export function sortTickets(tickets: Ticket[], sort: 'priority' | 'recent') {
+  const rank = ['urgent', 'high', 'medium', 'low']
+  return [...tickets].sort(
+    (a, b) =>
+      (sort === 'recent'
+        ? Date.parse(b.updated_at) - Date.parse(a.updated_at)
+        : rank.indexOf(a.priority) - rank.indexOf(b.priority)) ||
+      a.project_id.localeCompare(b.project_id) ||
+      a.number - b.number ||
+      a.id.localeCompare(b.id),
   )
 }
 

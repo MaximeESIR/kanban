@@ -23,3 +23,17 @@ Référence : code au commit `563ea3864e1fb0dd0ffcb80f1cf4337633af1fe2`. Compara
 | Validation automatisée                              | Aucun script de test dans le package examiné                       | Tests PostgreSQL/RLS, IndexedDB, worker, navigateur et PWA hors ligne                                    | Exigence utilisateur                                                    | Atelier pour la couverture vérifiable ; ne remplace pas les essais Supabase/moteur réels        |
 
 La V1 ne peut donc pas être décrite honnêtement comme supérieure sur tous les points. Elle ajoute le lien PC et des protections de synchronisation, mais le dépôt de référence conserve des avantages d’ergonomie et de partage explicitement listés ci-dessus.
+
+## Mise à jour du 1er novembre — Atelier V1.1
+
+Le tableau précédent garde la photographie du 31 octobre. La nouvelle référence examinée est le commit [`c5c77f9`](https://github.com/flyingpafnouti/kan/commit/c5c77f9d43f6f530dcef2822034c8cb529388ae3), après trois nouveaux commits.
+
+| Ajout de la référence | Atelier V1.1 | Différence et intérêt |
+| --- | --- | --- |
+| Parent qui attend ses tickets enfants ; indentation et compteur de blocages | Parent de regroupement distinct de jusqu’à 50 prérequis par ticket ; indentation, compteurs, navigation et notification de disponibilité | Atelier autorise qu’un même prérequis débloque plusieurs fonctionnalités. Le parent ne bloque pas implicitement : il faut choisir les prérequis. |
+| Contrôle des candidats dans l’interface et protection de l’affichage contre les cycles | Contrôles de cycles et d’appartenance au projet/propriétaire dans l’interface et dans PostgreSQL | Atelier protège aussi les écritures directes et les synchronisations différées ; tests SQL et IndexedDB ajoutés. |
+| Tri global priorité / modification récente | Même choix, conservé sur l’appareil | Fonction similaire ; notre vue globale reste une liste, celle de la référence est un tableau. |
+| Enregistrement d’un ticket à la fermeture, navigation et mise en arrière-plan | Enregistrement à la fermeture/en arrière-plan, plus brouillons locaux persistants et garde contre les révisions obsolètes | Atelier permet de reprendre une saisie interrompue ou de créer une copie en cas de conflit. Les brouillons non enregistrés ne sont pas synchronisés entre appareils. |
+| Pas de nouvel exécuteur de développement dans ces trois commits | Service local texte/audio/recherche, toujours sans exécuteur de code | Aucun des deux projets examinés ne propose encore une équipe d’agents qui développe les tickets automatiquement. |
+
+L’intérêt d’Atelier reste son adaptation au PC personnel et ses contrôles de synchronisation. La référence aurait aussi constitué une base raisonnable à reprendre ; cette comparaison ne prétend pas établir une supériorité globale d’ergonomie ou de fiabilité en production.
