@@ -1,3 +1,4 @@
+import { boundedRequest } from '../lib/boundedRequest'
 import { useEffect, useRef, useState } from 'react'
 import type { Ticket } from '../domain'
 import { supabase, friendlyError } from '../lib/supabase'
@@ -51,9 +52,13 @@ export function TicketActivity({
       if (!navigator.onLine) return
       setLoading(true)
       try {
-        const { data, error } = await supabase!.rpc('ticket_agent_activity', {
-          p_ticket: ticket.id,
-        })
+        const { data, error } = await boundedRequest((signal) =>
+          supabase!
+            .rpc('ticket_agent_activity', {
+              p_ticket: ticket.id,
+            })
+            .abortSignal(signal),
+        )
         if (error) throw error
         if (!data || !Array.isArray(data.history) || !Object.hasOwn(data, 'claim'))
           throw new Error('Historique des agents indisponible. Vérifiez la mise à jour 009.')
@@ -95,7 +100,10 @@ export function TicketActivity({
     onBusy(true)
     setError('')
     try {
-      const { data, error } = await supabase.rpc(name, { p_request: request.current.id, ...params })
+      const args = { p_request: request.current.id, ...params }
+      const { data, error } = await boundedRequest((signal) =>
+        supabase!.rpc(name, args).abortSignal(signal),
+      )
       if (error) throw error
       if (!data?.ticket || data.ticket.id !== ticket.id)
         throw new Error('Réponse inattendue. Actualisez le ticket pour vérifier son état.')

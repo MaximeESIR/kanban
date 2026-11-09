@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test'
 
-for (const conflict of [false, true])
-  test(`agent history ${conflict ? 'preserves a concurrent description after a version conflict' : 'restores a description and only human approval marks Done'}`, async ({
-    page,
-  }) => {
+for (const scenario of ['success', 'conflict', 'lost-reply'])
+  test(`agent history ${scenario}`, async ({ page }) => {
+    const conflict = scenario === 'conflict'
+    let approvalRequest = ''
     const uid = '10000000-0000-4000-8000-000000000001',
       pid = '20000000-0000-4000-8000-000000000001',
       tid = '30000000-0000-4000-8000-000000000001',
@@ -124,10 +124,13 @@ for (const conflict of [false, true])
         }
       } else if (path.endsWith('/rpc/approve_agent_review')) {
         approvals++
+        if (approvalRequest) expect(body.p_request).toBe(approvalRequest)
+        approvalRequest = body.p_request
         expect(body).toMatchObject({ p_ticket: tid, p_claim: cid, p_version: versions[1] })
         ticket = { ...ticket, status: 'done', updated_at: versions[2] }
         claim = { ...claim, state: 'approved', updated_at: versions[2] }
         data = { ticket, claim }
+        if (scenario === 'lost-reply' && approvals === 1) return
       }
       await route.fulfill({
         status,
@@ -178,12 +181,19 @@ for (const conflict of [false, true])
       )
       expect(approvals).toBe(0)
       await approve.click()
+      if (scenario === 'lost-reply') {
+        await expect(activity.getByRole('alert')).toContainText('Le résultat n’est pas confirmé', {
+          timeout: 20000,
+        })
+        await expect(approve).toBeEnabled()
+        await approve.click()
+      }
       await expect(
         activity.getByText('Agent Codex · Résultat validé', { exact: true }),
       ).toBeVisible()
       await expect(page.getByRole('combobox', { name: 'Statut', exact: true })).toHaveValue('done')
       expect(restores).toBe(1)
-      expect(approvals).toBe(1)
+      expect(approvals).toBe(scenario === 'lost-reply' ? 2 : 1)
     }
     expect(pageErrors).toEqual([])
   })
