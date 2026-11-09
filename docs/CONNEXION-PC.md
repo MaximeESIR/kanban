@@ -2,7 +2,7 @@
 
 ## Maintenant : reprendre la demande de dossier en attente
 
-Le compte MCP et sa connexion réelle sont vérifiés. Les migrations007,009,010 ont été appliquées. Le service PC tourne encore avec l’ancienne configuration ; il doit être mis à jour une fois.
+Le compte MCP et sa connexion réelle sont vérifiés. Les migrations007,009,010 ont été appliquées. Le service PC doit maintenant recevoir les réglages du proxy réseau préparés. Le script ci-dessous les installe et vérifie la connexion réelle avant d’annoncer le succès.
 
 1. Sur ton PC, ouvre **Terminal** (Ctrl + Alt + T).
 2. Colle cette commande, puis appuie sur **Entrée** :
@@ -12,7 +12,7 @@ Le compte MCP et sa connexion réelle sont vérifiés. Les migrations007,009,010
    ```
 
 3. Quand Ubuntu demande ton mot de passe, saisis **le mot de passe de ta session Ubuntu**, puis Entrée. Aucun caractère ne s’affiche, c’est normal. Ce n’est pas le mot de passe Supabase.
-4. Attends **Service Atelier démarré et configuré pour les prochains démarrages du PC**.
+4. Attends **PC connecté à Supabase : authentification, événements et présence confirmés**. Le message « service démarré » seul ne suffit pas. Le contrôle peut prendre jusqu’à 45 secondes.
 5. Reviens dans le projet : la demande existante doit devenir **Chemin vérifié et associé au projet**. Ne recrée pas la demande.
 
 Cette installation demande les droits administrateur pour remplacer l’unité système. Le programme lui-même tourne avec ton compte habituel, pas comme root. Aucun port de la box à ouvrir.

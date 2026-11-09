@@ -7,6 +7,7 @@ from pathlib import Path
 from atelier_worker import Gateway, Runner
 from realtime_events import RealtimeEvents
 from repository_paths import RepositoryRequests
+from connection_status import mark_connected
 from ticket_executor import TicketExecutor, ProcessLock, ExecutionError, read_registry, preflight, STATE, available_models
 
 def main():
@@ -41,6 +42,7 @@ def main():
                     last_registry=now
                 if events.connected.is_set() and now-last_heartbeat>10:
                     gateway.rpc('worker_heartbeat',{'p_capabilities':ai.current_capabilities()})
+                    mark_connected()
                     last_heartbeat=now
                 if (notified or repositories.due()) and events.connected.is_set() and not code.process:
                     if repositories.tick(models,ready):

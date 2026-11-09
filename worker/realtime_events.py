@@ -41,7 +41,7 @@ class RealtimeEvents:
                 gateway = self.gateway_factory()
                 gateway.auth()
                 url = gateway.url.replace('https://', 'wss://', 1) + '/realtime/v1/websocket?' + urlencode({'apikey': gateway.key, 'vsn': '1.0.0'})
-                with connect(url, open_timeout=15, close_timeout=2, max_size=65536, proxy=None) as sock:
+                with connect(url, open_timeout=15, close_timeout=2, max_size=65536, proxy=True) as sock:
                     self.socket = sock
                     sock.send(json.dumps(self.join(gateway.token)))
                     joined_at = time.monotonic()

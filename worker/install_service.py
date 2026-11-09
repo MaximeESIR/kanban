@@ -5,6 +5,7 @@ import json
 import os
 import pwd
 import subprocess
+from network_config import save_network_config
 from ticket_executor import read_registry, STATE, git
 
 def main():
@@ -16,6 +17,7 @@ def main():
     root=Path(__file__).resolve().parent.parent
     config=Path.home()/'.config/atelier';config.mkdir(parents=True,exist_ok=True,mode=0o700)
     STATE.mkdir(parents=True,exist_ok=True,mode=0o700)
+    save_network_config(config/'network.env')
     settings=config/'worker.env'
     if not settings.exists():
         settings.write_text('''# Fill the four Supabase values, then start atelier-worker.service.
@@ -51,6 +53,7 @@ Type=simple
 {identity}\
 WorkingDirectory={str(root).replace("%", "%%")}
 EnvironmentFile={str(settings).replace("%", "%%")}
+EnvironmentFile=-{str(config/"network.env").replace("%", "%%")}
 Environment=PATH={Path.home()}/.local/bin:/usr/local/bin:/usr/bin:/bin
 {precheck}\
 ExecStart={quote(root/'worker/.venv/bin/python')} {quote(root/'worker/atelier_worker.py')}

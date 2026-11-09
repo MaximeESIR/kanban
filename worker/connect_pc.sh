@@ -22,5 +22,6 @@ if ! sudo systemctl restart atelier-worker.service; then
 fi
 systemctl is-active atelier-worker.service
 echo 'Service Atelier démarré et configuré pour les prochains démarrages du PC.'
+python3 "$atelier_worker_dir/connection_status.py" "$(systemctl show atelier-worker.service -p MainPID --value)"
 echo 'Reviens dans ton projet : la demande de dossier en attente va être reprise automatiquement.'
 echo 'Attends le message « Chemin vérifié et associé au projet ». Ne recrée pas la demande.'
