@@ -1,12 +1,47 @@
 # Maxime : ce que tu dois faire, dans l’ordre
 
-**Nouveau — Claude, Codex et Vibe via MCP :** les trois clients sont déjà enregistrés sur ce PC. Pour activer leur accès aux tickets, suis uniquement le [guide MCP, section « À faire maintenant »](../mcp/README.md). Cela nécessite la migration 009 et un compte agent distinct. Les étapes ci-dessous concernent le service PC et restent utiles si tu ne les as pas terminées.
+## Maintenant : reprendre la demande de dossier en attente
 
-**Ta connexion, la double authentification, le statut PC connecté et la recherche de notes fonctionnent. Le choix du modèle et de l’effort est activé. Pour saisir librement le chemin d’un projet et travailler directement dedans, passe à l’étape 8, déjà dépliée.**
+Le compte MCP et sa connexion réelle sont vérifiés. Les migrations007,009,010 ont été appliquées. Le service PC tourne encore avec l’ancienne configuration ; il doit être mis à jour une fois.
 
-**Déjà fait pour toi :** site GitHub Pages, application mobile installable, code, scripts, modèles de dictée/texte installés sur ce PC, service démarré et dépôt Atelier enregistré. **Tu n’as rien à réinstaller et aucun port de ta box à ouvrir.**
+1. Sur ton PC, ouvre **Terminal** (Ctrl + Alt + T).
+2. Colle cette commande, puis appuie sur **Entrée** :
 
-**Si une étape échoue : arrête-toi à cette étape et donne-moi son numéro et le message d’erreur. Ne m’envoie pas de mot de passe.**
+   ```bash
+   bash /home/mblaret/Documents/kanban/worker/connect_pc.sh
+   ```
+
+3. Quand Ubuntu demande ton mot de passe, saisis **le mot de passe de ta session Ubuntu**, puis Entrée. Aucun caractère ne s’affiche, c’est normal. Ce n’est pas le mot de passe Supabase.
+4. Attends **Service Atelier démarré et configuré pour les prochains démarrages du PC**.
+5. Reviens dans le projet : la demande existante doit devenir **Chemin vérifié et associé au projet**. Ne recrée pas la demande.
+
+Cette installation demande les droits administrateur pour remplacer l’unité système. Le programme lui-même tourne avec ton compte habituel, pas comme root. Aucun port de la box à ouvrir.
+
+## Petit cours : utiliser Atelier au quotidien
+
+### 1. Ce qui fonctionne avec le PC éteint
+
+Tu peux gérer tes projets, tickets et notes depuis le téléphone. Choisis **Sans IA** dans **Paramètres de recherche** pour chercher sans PC. Hors ligne, seuls les documents déjà chargés sur cet appareil sont disponibles. Le mode Groq n’est pas encore activé dans cette version.
+
+### 2. Connecter le PC
+
+Après l’installation ci-dessus, le service démarre automatiquement avec Ubuntu : pas besoin de laisser un terminal ouvert ni de recopier la commande chaque jour. Le PC doit être allumé, éveillé et connecté au réseau. PC en veille ou éteint = demandes en attente. Dans Notes, **Assistant PC · connecté** indique la présence du service ; `active` dans un terminal ne prouve pas à lui seul la connexion à Supabase.
+
+### 3. Donner un dossier à chaque projet
+
+Ouvre ton projet, puis le bloc du dossier PC. **Nouveau dossier pour le projet** correspond à un dossier vide ou inexistant ; **Dépôt Git existant** reprend un projet déjà suivi avec Git. Copie le chemin absolu depuis le gestionnaire Fichiers (Ctrl + L), colle-le dans **Chemin du projet sur le PC**, puis **Créer et associer** ou **Vérifier et associer**. Attends la confirmation. Le chemin est toujours celui du PC, même depuis le téléphone. Le dossier du kanban n’est pas imposé. L’association ne lance aucun agent.
+
+### 4. Faire travailler un agent
+
+- **Depuis le web, bouton Run** : le service démarre Codex, un ticket à la fois. Choisis modèle et effort, puis attends son rapport. Vibe et Claude ne sont pas encore proposés par ce bouton.
+- **Depuis Claude Code, Codex ou Vibe déjà ouvert sur le PC** : active le projet avec **Utiliser ce projet avec les agents**, puis demande au client : « Avec le MCP Atelier, traite uniquement le ticket [titre] du projet [nom], dans le dossier [chemin]. Teste le résultat et rends un rapport pour ma validation. » Plusieurs projets peuvent être activés ; chaque session reçoit son propre projet/ticket. L’activation ne démarre pas de session.
+- Quand le rapport arrive, vérifie les changements et les tests, puis utilise **Valider le résultat de l’agent et passer à Done**. Annuler une prise en charge MCP dans l’application ne tue pas la session du client : interromps-la aussi sur le PC.
+
+### 5. Dictée et réécriture
+
+Dans une note, ouvre **Assistant PC**. Le PC doit apparaître connecté pour utiliser **Dicter**, **Résumer** ou **Réécrire**. Vérifie le résultat avant de l’appliquer ; l’annulation permet de revenir au texte précédent. Pour la recherche, sélectionne **Avec IA · sur mon PC** dans les paramètres si tu souhaites utiliser le modèle local.
+
+**En cas de problème : copie le message exact affiché. Ne transmets jamais un mot de passe.** Les sections repliées ci-dessous conservent les étapes détaillées d’installation ; inutile de les refaire si elles sont déjà terminées.
 
 <details>
 <summary><strong>1 — DÉJÀ FAIT : créer le projet Supabase</strong></summary>

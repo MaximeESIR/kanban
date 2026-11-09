@@ -10,7 +10,9 @@ python3 "$atelier_worker_dir/ticket_executor.py" doctor
 python3 "$atelier_worker_dir/install_service.py" --system
 echo 'Ubuntu demande ton mot de passe administrateur pour installer le service Atelier.'
 sudo -v
-systemctl --user disable --now atelier-worker.service
+if systemctl --user cat atelier-worker.service >/dev/null 2>&1; then
+  systemctl --user disable --now atelier-worker.service
+fi
 sudo install -m 0644 "$HOME/.config/atelier/atelier-worker-system.service" /etc/systemd/system/atelier-worker.service
 sudo systemctl daemon-reload
 sudo systemctl enable atelier-worker.service
@@ -19,4 +21,6 @@ if ! sudo systemctl restart atelier-worker.service; then
   exit 1
 fi
 systemctl is-active atelier-worker.service
-echo 'Service Atelier démarré. Ouvre une note dans Atelier, puis Assistant PC.'
+echo 'Service Atelier démarré et configuré pour les prochains démarrages du PC.'
+echo 'Reviens dans ton projet : la demande de dossier en attente va être reprise automatiquement.'
+echo 'Attends le message « Chemin vérifié et associé au projet ». Ne recrée pas la demande.'

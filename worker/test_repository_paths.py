@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from urllib.error import HTTPError
 from unittest.mock import Mock,patch
 from repository_paths import check_path,register_path,RepositoryRequests
 from ticket_executor import ExecutionError,read_registry
@@ -50,5 +51,23 @@ class RepositoryPathTests(unittest.TestCase):
         receiver=RepositoryRequests(gateway)
         self.assertFalse(receiver.tick([],True));self.assertFalse(receiver.due())
         receiver.retry_at-=66;self.assertTrue(receiver.due())
+
+    def test_missing_migration_recovers_without_restart_and_without_busy_polling(self):
+        gateway=Mock()
+        gateway.rpc.side_effect=HTTPError('https://example.test',404,'Missing',{},None)
+        receiver=RepositoryRequests(gateway)
+        self.assertFalse(receiver.tick([],True))
+        self.assertFalse(receiver.supported)
+        for _ in range(10):self.assertFalse(receiver.tick([],True))
+        self.assertEqual(gateway.rpc.call_count,1)
+        receiver.retry_at-=301
+        job={**self.job,'id':'request','lease':'lease'}
+        gateway.rpc.side_effect=lambda name,args: job if name=='worker_repository_claim' else None
+        row={'id':'repository','path':str(self.repo)}
+        with patch('repository_paths.register_path',return_value=row),patch('repository_paths.read_registry',return_value=[row]):
+            self.assertTrue(receiver.tick([],True))
+        self.assertTrue(receiver.supported)
+        self.assertEqual(receiver.retry_at,0)
+        self.assertEqual(gateway.rpc.call_args.args[0],'worker_repository_finish')
 
 if __name__=='__main__':unittest.main()

@@ -71,16 +71,18 @@ class RepositoryRequests:
     def due(self): return bool(self.retry_at and time.monotonic()>=self.retry_at)
 
     def tick(self, models, ready):
-        if not self.supported:return False
+        if not self.supported and not self.due():return False
         self.retry_at=time.monotonic()+65
         try:
             job=self.gateway.rpc('worker_repository_claim',{})
         except HTTPError as error:
             if error.code==404:
-                self.supported=False;self.retry_at=0
-                print('Ajout de chemins disponible après migration 007 et redémarrage. Notes et tickets existants restent disponibles.',flush=True)
+                if self.supported:
+                    print('Configuration des dossiers indisponible : nouvelle vérification automatique dans 5 minutes. Notes et tickets existants restent disponibles.',flush=True)
+                self.supported=False;self.retry_at=time.monotonic()+300
                 return False
             raise
+        self.supported=True
         if not job:
             self.retry_at=0
             return False
