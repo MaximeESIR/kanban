@@ -146,9 +146,15 @@ Sans projet Supabase et sans moteur installé/configuré sur le PC, nous ne pouv
 - Dossier : formulaire du chemin exact affiché avant la liste des dépôts connus, panneau ouvert pour un projet non associé, instructions pour copier le chemin depuis Fichiers sur le PC. Nouveau dossier vide déjà pris en charge, aucun rattachement obligatoire au kanban. Aucun navigateur de fichiers distant ni port supplémentaire. Les dossiers existants non vides sans Git restent refusés par le worker.
 - Tests SQL réels PGlite : MFA, compte agent non autorisé à changer la sélection, autre propriétaire, refus de lire/modifier l’ancien projet, recherche limitée, blocage pendant claim, projet futur sans nouveau SQL et désélection. 74 tests unitaires/SQL réussis.
 
-
 ## 9 novembre 2026 — correction du proxy du MCP
 
 - Échec réel signalé dans le client : connexion Supabase impossible. Diagnostic différentiel : Python et curl atteignent Supabase ; fetch de Node20 ignore le proxy d’environnement. L’absence supposée de wg0 ne suffisait donc pas à expliquer cet échec. Aucune modification réseau/VPN réalisée.
 - Correction permanente : transport Undici6.29.1 avec EnvHttpProxyAgent, initialisation différée, HTTP(S)_PROXY et NO_PROXY respectés. Validation TLS conservée, pas de repli direct contournant un proxy en échec, pas de relance automatique des mutations ; secrets toujours privés.
 - 13 tests TypeScript MCP et6 tests Python passent, compilation réussie. Test local de tunnel via proxy, exemption NO_PROXY et refus en cas de proxy indisponible. Vérification réelle en lecture seule par SDK MCP stdio et launcher enregistré : authentification et liste du projet « Ecrire une chanson » réussies. Aucun ticket lu/modifié ni modèle lancé. Les clients déjà ouverts doivent relancer leur session pour charger le serveur corrigé.
+
+## 9 novembre 2026 — champ du dossier toujours visible
+
+- Signalement utilisateur : seuls « Choisir un dépôt » et le dépôt du kanban visibles. Le navigateur utilisateur n’est pas accessible dans cette session ; le bundle public contient bien le formulaire récent. La cause précise de son écran (version en cache ou erreur de chargement) n’est pas encore confirmée.
+- Défaut reproduit dans le code : une erreur de lecture des PC/demandes masquait tout le formulaire. Correction : saisie conservée et visible même en panne, bouton Réessayer, envoi bloqué jusqu’au chargement valide ; seules les erreurs de schéma réclament une migration. Les autres erreurs ne prétendent plus qu’une migration manque.
+- Ajout dans la liste des dépôts : « Autre dossier sur le PC… », qui focalise le champ de chemin sans associer un dépôt ni lancer une tâche. Le champ accepte un emplacement indépendant du kanban.
+- Validation : 74 tests unitaires/SQL réussis, parcours Run ordinateur/mobile réussis avec panne503 simulée, saisie visible, bouton désactivé pendant la panne, récupération après Réessayer sans perdre le chemin, puis association et exécution simulées. Aucun dossier réel créé ni ticket réel lancé.

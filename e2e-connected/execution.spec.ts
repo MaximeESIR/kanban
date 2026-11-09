@@ -121,9 +121,18 @@ test('Run tolerates a fast device clock, live events update progress, human appr
       } else if (m.event === 'heartbeat') send('phx_reply', { status: 'ok', response: {} })
     })
   })
+  let repositoryUnavailable = true
   await page.route('https://qa.supabase.co/**', async (route) => {
     const p = new URL(route.request().url()).pathname,
       body = route.request().postDataJSON()
+    if (p.endsWith('/rpc/repository_pcs') && repositoryUnavailable) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 'UNAVAILABLE', message: 'Temporary service failure' }),
+      })
+      return
+    }
     let data: any = []
     if (p.includes('/auth/v1/token')) data = session
     else if (p.includes('/auth/v1/user')) data = user
@@ -210,7 +219,16 @@ test('Run tolerates a fast device clock, live events update progress, human appr
   await page.getByRole('button', { name: 'Ouvrir Déploiement Jetson' }).click()
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled()
   await expect(page.locator('.repository-panel')).toHaveAttribute('open', '')
+  await expect(page.getByRole('button', { name: 'Réessayer la connexion au PC' })).toBeVisible()
+  await page.getByLabel('Dépôt du projet').selectOption('__custom_path__')
+  await expect(page.getByLabel('Chemin du projet sur le PC')).toBeFocused()
   await page.getByLabel('Chemin du projet sur le PC').fill('/home/test/repos/jetson')
+  await expect(
+    page.getByRole('button', { name: 'Vérifier et associer', exact: true }),
+  ).toBeDisabled()
+  repositoryUnavailable = false
+  await page.getByRole('button', { name: 'Réessayer la connexion au PC' }).click()
+  await expect(page.getByLabel('Chemin du projet sur le PC')).toHaveValue('/home/test/repos/jetson')
   await page.getByRole('button', { name: 'Vérifier et associer', exact: true }).click()
   await expect(page.getByText('Chemin envoyé — en attente du PC.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled()

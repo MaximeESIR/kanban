@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react'
 import { Play, Monitor, Check } from 'lucide-react'
 import { supabase, friendlyError } from '../lib/supabase'
 import { isBlocked, type Project, type Ticket } from '../domain'
@@ -151,8 +151,10 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
   const selected = bindings.find((b) => b.project_id === project.id)?.repository_id || ''
   const repo = repositories.find((r) => r.id === selected)
   const [expanded, setExpanded] = useState(!repo)
+  const panel = useRef<HTMLDetailsElement>(null)
   return (
     <details
+      ref={panel}
       className="repository-panel"
       open={expanded}
       onToggle={(event) => setExpanded(event.currentTarget.open)}
@@ -176,6 +178,12 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
               value={selected}
               disabled={busy}
               onChange={async (e) => {
+                if (e.target.value === '__custom_path__') {
+                  panel.current
+                    ?.querySelector<HTMLInputElement>('.repository-path-form input')
+                    ?.focus()
+                  return
+                }
                 setBusy(true)
                 setMessage('')
                 try {
@@ -191,6 +199,7 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
               }}
             >
               <option value="">Choisir un dépôt…</option>
+              <option value="__custom_path__">Autre dossier sur le PC…</option>
               {repositories.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label} — {r.local_path}

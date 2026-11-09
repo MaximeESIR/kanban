@@ -8,6 +8,8 @@ export function RepositoryPath({ projectId }: { projectId: string }) {
   const [pcs, setPCs] = useState<PC[]>([]),
     [requests, setRequests] = useState<Request[]>([]),
     [setupError, setSetupError] = useState(''),
+    [ready, setReady] = useState(false),
+    [attempt, setAttempt] = useState(0),
     [error, setError] = useState(''),
     [worker, setWorker] = useState(''),
     [path, setPath] = useState(''),
@@ -17,6 +19,7 @@ export function RepositoryPath({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!supabase) return
     let live = true
+    setReady(false)
     const refresh = async () => {
       const [workers, jobs] = await Promise.all([
         supabase!.rpc('repository_pcs'),
@@ -29,18 +32,29 @@ export function RepositoryPath({ projectId }: { projectId: string }) {
       ])
       if (!live) return
       if (workers.error || jobs.error) {
+        setReady(false)
+        const failure = workers.error || jobs.error
         setSetupError(
-          'La saisie des chemins nécessite la migration 007 et la mise à jour du service PC. Les étapes sont dans le guide de connexion.',
+          ['PGRST202', 'PGRST205', '42883', '42P01'].includes(failure?.code || '')
+            ? 'La configuration des dossiers nécessite la migration 007 dans Supabase.'
+            : 'Impossible de charger les informations du PC. ' + friendlyError(failure),
         )
+      } else if (!Array.isArray(workers.data) || !Array.isArray(jobs.data)) {
+        setReady(false)
+        setSetupError('Réponse inattendue du service PC. Réessayez le chargement.')
       } else {
+        setReady(true)
         setSetupError('')
-        setPCs(workers.data || [])
-        setRequests(jobs.data || [])
+        setPCs(workers.data)
+        setRequests(jobs.data)
       }
     }
     const trigger = () => {
       void refresh().catch(() => {
-        if (live) setSetupError('Connexion au PC indisponible. Réessayez après reconnexion.')
+        if (live) {
+          setReady(false)
+          setSetupError('Connexion au PC indisponible. Réessayez après reconnexion.')
+        }
       })
     }
     trigger()
@@ -51,7 +65,7 @@ export function RepositoryPath({ projectId }: { projectId: string }) {
       for (const event of ['atelier-execution-refresh', 'online', 'focus'])
         window.removeEventListener(event, trigger)
     }
-  }, [projectId])
+  }, [projectId, attempt])
   const selectedPC = pcs.find((p) => p.id === worker) || pcs[0]
   const latest = requests[0]
   const pending = latest && ['queued', 'checking'].includes(latest.status)
@@ -68,104 +82,113 @@ export function RepositoryPath({ projectId }: { projectId: string }) {
         une chanson, vous pouvez choisir un nouveau dossier vide, par exemple
         /home/mblaret/Documents/chanson. Le dossier du kanban n’est pas imposé.
       </p>
-      {setupError ? (
-        <p role="status">{setupError}</p>
-      ) : (
-        <form
-          onSubmit={async (event) => {
-            event.preventDefault()
-            if (!supabase || !selectedPC || busy) return
-            setBusy(true)
-            setError('')
-            const id = requestId || crypto.randomUUID()
-            setRequestId(id)
-            try {
-              const result = await supabase.rpc('request_repository', {
-                p_id: id,
-                p_project: projectId,
-                p_worker: selectedPC.id,
-                p_path: path,
-                p_create: create,
-              })
-              if (result.error) throw result.error
-              setRequestId(null)
-              refresh()
-            } catch (e) {
-              setError(friendlyError(e))
-            } finally {
-              setBusy(false)
-            }
-          }}
-        >
-          {pcs.length > 1 && (
-            <label>
-              PC concerné
-              <select
-                value={selectedPC?.id || ''}
-                disabled={busy}
-                onChange={(e) => {
-                  setWorker(e.target.value)
-                  setRequestId(null)
-                }}
-              >
-                {pcs.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+      {setupError && (
+        <div role="status">
+          <p>{setupError}</p>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => setAttempt((value) => value + 1)}
+          >
+            Réessayer la connexion au PC
+          </button>
+        </div>
+      )}
+      {!ready && !setupError && <p role="status">Chargement des informations du PC…</p>}
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault()
+          if (!supabase || !selectedPC || busy || !ready) return
+          setBusy(true)
+          setError('')
+          const id = requestId || crypto.randomUUID()
+          setRequestId(id)
+          try {
+            const result = await supabase.rpc('request_repository', {
+              p_id: id,
+              p_project: projectId,
+              p_worker: selectedPC.id,
+              p_path: path,
+              p_create: create,
+            })
+            if (result.error) throw result.error
+            setRequestId(null)
+            refresh()
+          } catch (e) {
+            setError(friendlyError(e))
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        {pcs.length > 1 && (
           <label>
-            Type de dossier
+            PC concerné
             <select
-              value={create ? 'new' : 'existing'}
+              value={selectedPC?.id || ''}
               disabled={busy}
               onChange={(e) => {
-                setCreate(e.target.value === 'new')
+                setWorker(e.target.value)
                 setRequestId(null)
               }}
             >
-              <option value="existing">Dépôt Git existant</option>
-              <option value="new">Nouveau dossier pour le projet</option>
+              {pcs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
             </select>
           </label>
-          <label>
-            Chemin du projet sur le PC
-            <input
-              value={path}
-              disabled={busy}
-              required
-              maxLength={1000}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="/home/vous/Documents/mon-projet"
-              onChange={(e) => {
-                setPath(e.target.value)
-                setRequestId(null)
-              }}
-            />
-          </label>
-          {create && (
-            <p>
-              Le dossier doit être vide ou inexistant, et son parent doit déjà exister. Codex
-              initialisera Git au premier Run.
-            </p>
-          )}
-          {!pcs.length && <p>Aucun PC associé à ce compte. Connectez le service PC.</p>}
-          <button
-            type="submit"
-            className="button secondary"
-            disabled={busy || !selectedPC || !path.trim()}
+        )}
+        <label>
+          Type de dossier
+          <select
+            value={create ? 'new' : 'existing'}
+            disabled={busy}
+            onChange={(e) => {
+              setCreate(e.target.value === 'new')
+              setRequestId(null)
+            }}
           >
-            {busy ? 'Envoi…' : create ? 'Créer et associer' : 'Vérifier et associer'}
-          </button>
+            <option value="existing">Dépôt Git existant</option>
+            <option value="new">Nouveau dossier pour le projet</option>
+          </select>
+        </label>
+        <label>
+          Chemin du projet sur le PC
+          <input
+            value={path}
+            disabled={busy}
+            required
+            maxLength={1000}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="/home/vous/Documents/mon-projet"
+            onChange={(e) => {
+              setPath(e.target.value)
+              setRequestId(null)
+            }}
+          />
+        </label>
+        {create && (
           <p>
-            Cette action associe le dossier ; seul Run lance le développement. Si le PC est éteint,
-            la demande attend son retour.
+            Le dossier doit être vide ou inexistant, et son parent doit déjà exister. Codex
+            initialisera Git au premier Run.
           </p>
-        </form>
-      )}
+        )}
+        {ready && !pcs.length && <p>Aucun PC associé à ce compte. Connectez le service PC.</p>}
+        <button
+          type="submit"
+          className="button secondary"
+          disabled={busy || !ready || !selectedPC || !path.trim()}
+        >
+          {busy ? 'Envoi…' : create ? 'Créer et associer' : 'Vérifier et associer'}
+        </button>
+        <p>
+          Cette action associe le dossier ; seul Run lance le développement. Si le PC est éteint, la
+          demande attend son retour.
+        </p>
+      </form>
       {latest && (
         <div role="status">
           {latest.status === 'queued' && <p>Chemin envoyé — en attente du PC.</p>}
