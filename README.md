@@ -4,6 +4,10 @@
 
 Application personnelle de projets, kanban et notes. Interface React / TypeScript adaptée à l’ordinateur et au téléphone, déployable sur GitHub Pages. Supabase assure l’authentification et le stockage privé. Un service local reçoit les demandes et peut lancer une session Codex par ticket, après autorisation du dépôt et vérification de son isolation.
 
+## Recherche sans PC ni IA
+
+Dans Notes et dans chaque projet, **Rechercher sans IA** classe les documents déjà chargés sur l’appareil par correspondance de mots, avec accents ignorés, préfixes et petites fautes tolérées. Les résultats ouvrent la note ou le ticket et affichent un extrait. Les brouillons de notes sont inclus ; les images intégrées ne sont pas indexées. Aucun appel au PC, à Groq ou à un modèle, aucun index envoyé à un service. Hors ligne, seules les données déjà disponibles dans l’espace ouvert sont recherchables ; les modifications non encore synchronisées depuis un autre appareil restent absentes. Cette recherche lexicale ne comprend pas les synonymes comme une recherche sémantique.
+
 ## MCP : Claude, Codex et Vibe
 
 Le serveur MCP local permet aux trois clients de lire, créer, rechercher et traiter les tickets autorisés. Il conserve l’historique des descriptions et exige une validation humaine après le rapport. Les clients travaillent dans le dépôt choisi, sans copie imposée. Le serveur ne lance pas de modèle et ne remplace pas le bouton Run : le client déjà ouvert fournit son modèle et ses outils.

@@ -1,3 +1,4 @@
+import { BrowserSearch } from './BrowserSearch'
 import { Assistant } from './Assistant'
 import { RichText, embeddedImage } from './RichText'
 import { type Project } from '../domain'
@@ -88,6 +89,10 @@ export function Notes({
           Perso
         </button>
       </div>
+      <BrowserSearch
+        documents={notes.map((n) => ({ ...n, ...drafts.get(n.id) }))}
+        onOpen={(id) => onSelect(id)}
+      />
       <Assistant
         enabled={assistantEnabled}
         searchDocs={notes.map((n) => ({

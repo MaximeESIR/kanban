@@ -1,3 +1,4 @@
+import { BrowserSearch } from './BrowserSearch'
 import { ProjectRepository, TicketExecution } from './Execution'
 import { Assistant } from './Assistant'
 import { useEffect, useRef, useState } from 'react'
@@ -392,6 +393,17 @@ export function Board({
       </header>
       {project.description && <p className="board-description">{project.description}</p>}
       <ProjectRepository project={project} enabled={assistantEnabled} />
+      <BrowserSearch
+        documents={tickets.map((t) => ({
+          id: t.id,
+          title: `#${t.number} ${t.title}`,
+          content: t.description,
+        }))}
+        onOpen={(id) => {
+          const ticket = tickets.find((t) => t.id === id)
+          if (ticket) onEditTicket(ticket)
+        }}
+      />
       <Assistant
         enabled={assistantEnabled}
         searchDocs={tickets.map((t) => ({ id: t.id, title: t.title, content: t.description }))}

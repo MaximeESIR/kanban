@@ -130,3 +130,10 @@ Sans projet Supabase et sans moteur installé/configuré sur le PC, nous ne pouv
 - L’expérience Groq reste sur sa branche dédiée. Lors d’une future fusion, sa migration008 ne devra ni abaisser la version9 ni déduire les capacités Groq du seul numéro de schéma. Le dessin libre, la recherche hybride avancée et le partage multiutilisateur de la référence ne sont pas importés dans cette livraison.
 
 - Première vérification GitHub : les tests TypeScript/SQL passent, mais le test Python d’installation révèle que le build MCP manque sur une machine neuve. Ajout du build automatique avant `npm test` ; aucune dépendance à des fichiers compilés présents seulement sur le PC.
+
+## 9 novembre 2026 — recherche navigateur sans IA
+
+- Recherche disponible dans Notes et dans les tickets du projet, indépendamment de la connexion PC. Index en mémoire construit à partir des seuls documents fournis à la vue, sans persistance supplémentaire ni appel réseau de recherche. Brouillons de notes inclus, données d’images exclues, lecture de tout le texte et non des seuls 12000 premiers caractères.
+- Classement par couverture des mots, fréquence dans le corpus et poids des titres ; accents ignorés, préfixes et une faute de frappe tolérés. Extraits textuels sûrs rendus par React. Ce mode est lexical, sans embeddings ni compréhension sémantique ; Groq et l’assistant PC restent distincts.
+- Hors ligne : recherche des données déjà chargées, sans promesse de fraîcheur pour les changements d’un autre appareil. Résultats limités à30 à l’écran, requête bornée et rendu différé pendant la saisie.
+- Validation : 73 tests unitaires/SQL passent, build réussi, deux parcours navigateur (ordinateur et mobile) réussis avec réseau coupé pour la recherche de tickets et de notes. Une erreur de sélecteur du test a été corrigée avant validation.
