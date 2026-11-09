@@ -10,7 +10,8 @@
     "build": "tsc",
     "check": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts && python3 -m unittest discover -s test -p '*_test.py'",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "pretest": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
