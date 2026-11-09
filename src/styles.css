@@ -3708,3 +3708,39 @@ svg {
 .ticket-execution p {
   margin: 4px 0;
 }
+
+.ticket-tools,
+.ticket-agent-activity {
+  margin: 16px 28px;
+  padding: 14px;
+  border: 1px solid var(--border, #d6dfd6);
+  border-radius: 10px;
+}
+.ticket-tools > summary,
+.ticket-history summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.ticket-tools .field {
+  margin-top: 12px;
+}
+.ticket-history > details {
+  border-top: 1px solid var(--border, #d6dfd6);
+  margin-top: 10px;
+  padding-top: 6px;
+}
+.ticket-image-tools {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  margin-top: -12px;
+}
+.ticket-image-tools small {
+  color: inherit;
+}
+@media (max-width: 600px) {
+  .ticket-tools,
+  .ticket-agent-activity {
+    margin-inline: 16px;
+  }
+}

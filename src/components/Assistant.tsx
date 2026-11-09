@@ -14,6 +14,7 @@ import {
 import { supabase, friendlyError } from '../lib/supabase'
 import { RichText } from './RichText'
 import { recentlySeen } from '../lib/serverClock'
+import { readAssistantPrompt, writeAssistantPrompt } from '../lib/assistantPrompt'
 export function usePC(enabled: boolean) {
   const [pcs, setPCs] = useState<PC[]>([]),
     [jobs, setJobs] = useState<AIJob[]>([]),
@@ -84,18 +85,46 @@ const PCContext = createContext<{ pcs: PC[]; jobs: AIJob[]; error: string }>({
   jobs: [],
   error: '',
 })
+const InstructionsContext = createContext({
+  prompt: '',
+  setPrompt: (_value: string) => {},
+  error: '',
+})
 export function AssistantProvider({
   enabled,
+  ownerId,
   children,
 }: {
   enabled: boolean
+  ownerId: string
   children: ReactNode
 }) {
   const state = usePC(enabled)
+  const [sharedPrompt, setSharedPrompt] = useState(() => readAssistantPrompt(ownerId))
+  const [promptError, setPromptError] = useState('')
+  useEffect(() => {
+    setSharedPrompt(readAssistantPrompt(ownerId))
+    setPromptError('')
+  }, [ownerId])
+  const rememberPrompt = (value: string) => {
+    setSharedPrompt(value)
+    try {
+      writeAssistantPrompt(ownerId, value)
+      setPromptError('')
+    } catch {
+      setPromptError(
+        'Ces instructions restent disponibles pour cette visite ; le navigateur a refusé leur sauvegarde.',
+      )
+    }
+  }
   useEffect(() => (enabled ? subscribeWorkspace() : undefined), [enabled])
   return (
     <PCContext.Provider value={state}>
-      <ExecutionProvider enabled={enabled}>{children}</ExecutionProvider>
+      <InstructionsContext.Provider
+        value={{ prompt: sharedPrompt, setPrompt: rememberPrompt, error: promptError }}
+      >
+        <ExecutionProvider enabled={enabled}>{children}</ExecutionProvider>
+      </InstructionsContext.Provider>
     </PCContext.Provider>
   )
 }
@@ -115,13 +144,16 @@ export function Assistant({
   onOpen?: (id: string) => void
 }) {
   const { pcs, jobs, error: connectionError } = useContext(PCContext)
+  const instructions = useContext(InstructionsContext)
   const [open, setOpen] = useState(false),
-    [prompt, setPrompt] = useState(''),
+    [searchPrompt, setSearchPrompt] = useState(''),
     [id, setId] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [recording, setRecording] = useState(false),
     [applied, setApplied] = useState(false)
+  const prompt = searchDocs ? searchPrompt : instructions.prompt
+  const setPrompt = searchDocs ? setSearchPrompt : instructions.setPrompt
   const recorder = useRef<MediaRecorder | null>(null),
     stream = useRef<MediaStream | null>(null),
     timer = useRef<ReturnType<typeof setTimeout> | null>(null),
@@ -250,6 +282,13 @@ export function Assistant({
               }
             />
           </label>
+          {!searchDocs && (
+            <small>
+              Instructions conservées sur cet appareil pour vos notes et tickets, jusqu’à la
+              déconnexion.
+            </small>
+          )}
+          {!searchDocs && instructions.error && <p role="status">{instructions.error}</p>}
           <div className="assistant-actions">
             {searchDocs ? (
               <button

@@ -1,0 +1,26 @@
+{
+  "name": "atelier-ticket-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts && python3 -m unittest discover -s test -p '*_test.py'",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.13",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "22.19.3",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "atelier": {
+      "type": "stdio",
+      "command": "/bin/bash",
+      "args": ["/home/mblaret/Documents/kanban/mcp/launch.sh"]
+    }
+  }
+}

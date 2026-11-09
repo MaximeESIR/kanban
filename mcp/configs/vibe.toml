@@ -1,0 +1,8 @@
+# Fragment à ajouter au config.toml Vibe, sans remplacer les autres paramètres.
+[[mcp_servers]]
+name = "atelier"
+transport = "stdio"
+command = "/bin/bash"
+args = ["/home/mblaret/Documents/kanban/mcp/launch.sh"]
+startup_timeout_sec = 15
+tool_timeout_sec = 60

@@ -1,0 +1,6 @@
+# Fragment à ajouter au config.toml du client, sans remplacer les autres paramètres.
+[mcp_servers.atelier]
+command = "/bin/bash"
+args = ["/home/mblaret/Documents/kanban/mcp/launch.sh"]
+startup_timeout_sec = 15
+tool_timeout_sec = 60

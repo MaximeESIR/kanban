@@ -13,3 +13,6 @@ playwright-report/
 worker/.venv/
 __pycache__/
 *.pyc
+
+# Independent MCP package build output.
+mcp/dist/

@@ -29,6 +29,7 @@ import {
   type Project,
   type Ticket,
   type Status,
+  type TicketSort,
 } from '../domain'
 import { EmptyState, ProjectIcon } from './ui'
 
@@ -282,6 +283,17 @@ export function Board({
   onMove: (ticket: Ticket, status: Status) => void
   onReorder: (ticket: Ticket, position: number) => void
 }) {
+  const sortKey = `atelier-project-sort:${project.owner_id}:${project.id}`
+  const readSort = (): TicketSort => {
+    try {
+      const value = localStorage.getItem(sortKey)
+      return value === 'priority' || value === 'recent' ? value : 'manual'
+    } catch {
+      return 'manual'
+    }
+  }
+  const [sort, setSort] = useState<TicketSort>(readSort)
+  useEffect(() => setSort(readSort()), [sortKey])
   const [showArchive, setShowArchive] = useState(false)
   const [query, setQuery] = useState(''),
     [priority, setPriority] = useState('all'),
@@ -313,6 +325,7 @@ export function Board({
       const status = hit?.closest<HTMLElement>('[data-column]')?.dataset.column as
         Status | undefined
       if (
+        sort === 'manual' &&
         target &&
         target.id !== ticket.id &&
         target.status === ticket.status &&
@@ -416,6 +429,26 @@ export function Board({
         </label>
         <div className="toolbar-controls">
           <label className="sort-control">
+            <ArrowDownWideNarrow size={15} />
+            <select
+              aria-label="Trier les tickets du projet"
+              value={sort}
+              onChange={(event) => {
+                const value = event.target.value as TicketSort
+                setSort(value)
+                try {
+                  localStorage.setItem(sortKey, value)
+                } catch {
+                  /* Sorting still works for this visit. */
+                }
+              }}
+            >
+              <option value="manual">Ordre manuel</option>
+              <option value="priority">Priorité</option>
+              <option value="recent">Modification récente</option>
+            </select>
+          </label>
+          <label className="sort-control">
             <Flag size={15} />
             <select
               aria-label="Filtrer par priorité"
@@ -468,9 +501,10 @@ export function Board({
       <div ref={boardRef} className="kanban">
         {statuses.map((status) => {
           const rows = nestedTickets(
-            selected
-              .filter((t) => t.status === status.id)
-              .sort((a, b) => (a.position || 0) - (b.position || 0) || a.number - b.number),
+            sortTickets(
+              selected.filter((t) => t.status === status.id),
+              sort,
+            ),
           )
           const items = rows.map((r) => r.ticket)
           const group = (t: Ticket) =>
@@ -544,7 +578,7 @@ export function Board({
                         <button
                           className="icon-button"
                           aria-label={`Monter ${ticket.title}`}
-                          disabled={busy || siblingIndex === 0}
+                          disabled={busy || sort !== 'manual' || siblingIndex === 0}
                           onClick={() =>
                             onReorder(ticket, (siblings[siblingIndex - 1]?.position || 0) - 1)
                           }
@@ -554,7 +588,9 @@ export function Board({
                         <button
                           className="icon-button"
                           aria-label={`Descendre ${ticket.title}`}
-                          disabled={busy || siblingIndex === siblings.length - 1}
+                          disabled={
+                            busy || sort !== 'manual' || siblingIndex === siblings.length - 1
+                          }
                           onClick={() =>
                             onReorder(ticket, (siblings[siblingIndex + 1]?.position || 0) + 1)
                           }

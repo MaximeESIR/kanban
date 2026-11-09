@@ -1,5 +1,7 @@
 # Maxime : ce que tu dois faire, dans l’ordre
 
+**Nouveau — Claude, Codex et Vibe via MCP :** les trois clients sont déjà enregistrés sur ce PC. Pour activer leur accès aux tickets, suis uniquement le [guide MCP, section « À faire maintenant »](../mcp/README.md). Cela nécessite la migration 009 et un compte agent distinct. Les étapes ci-dessous concernent le service PC et restent utiles si tu ne les as pas terminées.
+
 **Ta connexion, la double authentification, le statut PC connecté et la recherche de notes fonctionnent. Le choix du modèle et de l’effort est activé. Pour saisir librement le chemin d’un projet et travailler directement dedans, passe à l’étape 8, déjà dépliée.**
 
 **Déjà fait pour toi :** site GitHub Pages, application mobile installable, code, scripts, modèles de dictée/texte installés sur ce PC, service démarré et dépôt Atelier enregistré. **Tu n’as rien à réinstaller et aucun port de ta box à ouvrir.**
@@ -44,13 +46,13 @@ Pour le retrouver dans l’explorateur de fichiers Ubuntu : ouvre **Fichiers**, 
 
 **Les fichiers suivants, quand le précédent a réussi :**
 
-| Ordre | Lien direct vers le texte à copier | Chemin complet sur ton PC |
-| --- | --- | --- |
-| 1 | [001_atelier.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/001_atelier.sql) | `/home/mblaret/Documents/kanban/supabase/migrations/001_atelier.sql` |
-| 2 | [002_connected_workspace.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/002_connected_workspace.sql) | `/home/mblaret/Documents/kanban/supabase/migrations/002_connected_workspace.sql` |
-| 3 | [003_ticket_relations.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/003_ticket_relations.sql) | `/home/mblaret/Documents/kanban/supabase/migrations/003_ticket_relations.sql` |
-| 4 | [004_worker_heartbeat.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/004_worker_heartbeat.sql) | `/home/mblaret/Documents/kanban/supabase/migrations/004_worker_heartbeat.sql` |
-| 5 | [005_ticket_execution.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/005_ticket_execution.sql) | `/home/mblaret/Documents/kanban/supabase/migrations/005_ticket_execution.sql` |
+| Ordre | Lien direct vers le texte à copier                                                                                                      | Chemin complet sur ton PC                                                        |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 1     | [001_atelier.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/001_atelier.sql)                         | `/home/mblaret/Documents/kanban/supabase/migrations/001_atelier.sql`             |
+| 2     | [002_connected_workspace.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/002_connected_workspace.sql) | `/home/mblaret/Documents/kanban/supabase/migrations/002_connected_workspace.sql` |
+| 3     | [003_ticket_relations.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/003_ticket_relations.sql)       | `/home/mblaret/Documents/kanban/supabase/migrations/003_ticket_relations.sql`    |
+| 4     | [004_worker_heartbeat.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/004_worker_heartbeat.sql)       | `/home/mblaret/Documents/kanban/supabase/migrations/004_worker_heartbeat.sql`    |
+| 5     | [005_ticket_execution.sql](https://raw.githubusercontent.com/MaximeESIR/kanban/main/supabase/migrations/005_ticket_execution.sql)       | `/home/mblaret/Documents/kanban/supabase/migrations/005_ticket_execution.sql`    |
 
 Pour passer au suivant : copie le texte du fichier suivant, retourne dans Supabase, clique **dans le texte déjà collé**, fais **Ctrl + A** puis **Ctrl + V** pour le remplacer entièrement, puis **Run**. Tu n’as pas besoin de chercher un nouveau bouton ou d’enregistrer la requête avec Save.
 
@@ -103,12 +105,13 @@ Si tu as créé des notes/tickets dans la démo, ouvre d’abord [Atelier](https
 5. Tu peux laisser **Next.js** et **App Router** sélectionnés. Descends jusqu’à **Add files**, puis regarde l’onglet **`.env.local`** dans le cadre à droite. Aucune commande d’installation à exécuter ici.
 6. Copie uniquement la valeur **après le signe `=`** sur chacune de ces deux lignes :
 
-   | Ligne affichée dans Supabase | Valeur à garder |
-   | --- | --- |
-   | `NEXT_PUBLIC_SUPABASE_URL=…` | L’adresse complète `https://…supabase.co` |
+   | Ligne affichée dans Supabase             | Valeur à garder                                  |
+   | ---------------------------------------- | ------------------------------------------------ |
+   | `NEXT_PUBLIC_SUPABASE_URL=…`             | L’adresse complète `https://…supabase.co`        |
    | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=…` | La clé complète commençant par `sb_publishable_` |
 
    Le texte peut dépasser à droite : utilise la barre de défilement horizontale pour vérifier que tu as copié la valeur jusqu’au bout. Ne copie ni le nom avant `=`, ni le signe `=`. La ligne `postgresql://…` de l’onglet **Direct** n’est pas l’URL de l’application.
+
 7. Garde ces deux valeurs pour GitHub et l’étape 5. La clé publique se retrouve aussi dans **Settings → API Keys**. [Documentation Supabase](https://supabase.com/docs/guides/getting-started/api-keys).
 
 **Dans GitHub :**
@@ -116,9 +119,9 @@ Si tu as créé des notes/tickets dans la démo, ouvre d’abord [Atelier](https
 1. Ouvre [cette page de variables du dépôt](https://github.com/MaximeESIR/kanban/settings/variables/actions).
 2. Dans l’onglet **Variables**, clique **New repository variable**, puis ajoute les deux lignes suivantes, une par une :
 
-   | Name — copie exactement ce nom | Value — colle la valeur correspondante |
-   | --- | --- |
-   | `VITE_SUPABASE_URL` | Le Project URL copié dans Supabase |
+   | Name — copie exactement ce nom  | Value — colle la valeur correspondante         |
+   | ------------------------------- | ---------------------------------------------- |
+   | `VITE_SUPABASE_URL`             | Le Project URL copié dans Supabase             |
    | `VITE_SUPABASE_PUBLISHABLE_KEY` | La clé `sb_publishable_…` copiée dans Supabase |
 
    Clique **Add variable** pour enregistrer la première, puis **New repository variable** pour créer la seconde. Les noms dans GitHub commencent bien par **`VITE_`**, même si l’exemple Supabase affiche `NEXT_PUBLIC_`.
@@ -153,12 +156,12 @@ nano /home/mblaret/.config/atelier/worker.env
 
 Voici les quatre lignes concernées, pour les reconnaître dans le fichier :
 
-| Ligne | Ce que tu dois y mettre |
-| --- | --- |
-| `ATELIER_SUPABASE_URL=` | Le même Project URL qu’à l’étape 4 |
-| `ATELIER_PUBLISHABLE_KEY=` | La même clé `sb_publishable_…` qu’à l’étape 4 |
-| `ATELIER_WORKER_EMAIL=` | L’e-mail de l’utilisateur **PC** créé à l’étape 3 |
-| `ATELIER_WORKER_PASSWORD=` | Le mot de passe de cet utilisateur **PC** |
+| Ligne                      | Ce que tu dois y mettre                           |
+| -------------------------- | ------------------------------------------------- |
+| `ATELIER_SUPABASE_URL=`    | Le même Project URL qu’à l’étape 4                |
+| `ATELIER_PUBLISHABLE_KEY=` | La même clé `sb_publishable_…` qu’à l’étape 4     |
+| `ATELIER_WORKER_EMAIL=`    | L’e-mail de l’utilisateur **PC** créé à l’étape 3 |
+| `ATELIER_WORKER_PASSWORD=` | Le mot de passe de cet utilisateur **PC**         |
 
 Ne mets ni ton compte personnel Atelier, ni le mot de passe de la base de données. Pour le mot de passe PC, une valeur aléatoire de 32 lettres/chiffres évite les caractères nécessitant un échappement dans ce fichier.
 
@@ -254,6 +257,5 @@ Le dossier parent d’un nouveau projet doit déjà exister. Aucun fichier exist
 ---
 
 **Mon travail après ton branchement :** vérifier la connexion réelle, la dictée depuis ton téléphone et un ticket Codex de test, puis corriger les problèmes constatés. Tu n’as pas à réécrire les scripts ou à comprendre leur architecture.
-
 
 Les mesures et explications techniques sont dans [REFERENCE-PC.md](REFERENCE-PC.md). Elles ne font pas partie des étapes à suivre ici.

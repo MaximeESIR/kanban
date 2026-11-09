@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { AssistantProvider } from './components/Assistant'
+import { clearAssistantPrompt } from './lib/assistantPrompt'
 import { MfaGate } from './components/MfaGate'
 import { InstallApp } from './components/InstallApp'
 import {
@@ -139,7 +140,10 @@ export default function App() {
       if (identity) await clearOffline(identity.id)
       setIdentity(null)
     }
-    if (identity) clearTicketDrafts(identity.id)
+    if (identity) {
+      clearTicketDrafts(identity.id)
+      clearAssistantPrompt(identity.id)
+    }
     finishRecovery()
   }
   if (loading)
@@ -166,7 +170,7 @@ export default function App() {
       />
     )
   const workspace = (
-    <AssistantProvider enabled={!identity.demo}>
+    <AssistantProvider enabled={!identity.demo} ownerId={identity.id}>
       <Workspace
         key={identity.id}
         identity={identity}
@@ -887,12 +891,27 @@ function Workspace({
           key={dialog.ticket?.id || `new:${dialog.project.id}:${dialog.parent || ''}`}
           ticket={data.tickets.find((t) => t.id === dialog.ticket?.id) || dialog.ticket}
           project={dialog.project}
+          projects={data.projects}
           tickets={data.tickets}
           initialStatus={dialog.status}
           initialParent={dialog.parent}
           onClose={() => setDialog(null)}
           onSave={(input, id, version) => saveTicket(input, id, false, version)}
-          onOpen={(ticket) => setDialog({ kind: 'ticket', ticket, project: dialog.project })}
+          onUpdated={(ticket) => {
+            revision.current++
+            setData((current) => ({
+              ...current,
+              tickets: current.tickets.map((item) => (item.id === ticket.id ? ticket : item)),
+            }))
+          }}
+          onOpen={(ticket) =>
+            setDialog({
+              kind: 'ticket',
+              ticket,
+              project:
+                data.projects.find((project) => project.id === ticket.project_id) || dialog.project,
+            })
+          }
           onNewChild={(ticket) =>
             setDialog({ kind: 'ticket', parent: ticket.id, project: dialog.project })
           }

@@ -202,13 +202,16 @@ export function nestedTickets(tickets: Ticket[]) {
   for (const t of tickets) visit(t, 0)
   return rows
 }
-export function sortTickets(tickets: Ticket[], sort: 'priority' | 'recent') {
+export type TicketSort = 'manual' | 'priority' | 'recent'
+export function sortTickets(tickets: Ticket[], sort: TicketSort) {
   const rank = ['urgent', 'high', 'medium', 'low']
   return [...tickets].sort(
     (a, b) =>
-      (sort === 'recent'
-        ? Date.parse(b.updated_at) - Date.parse(a.updated_at)
-        : rank.indexOf(a.priority) - rank.indexOf(b.priority)) ||
+      (sort === 'manual'
+        ? (a.position || 0) - (b.position || 0)
+        : sort === 'recent'
+          ? Date.parse(b.updated_at) - Date.parse(a.updated_at)
+          : rank.indexOf(a.priority) - rank.indexOf(b.priority)) ||
       a.project_id.localeCompare(b.project_id) ||
       a.number - b.number ||
       a.id.localeCompare(b.id),

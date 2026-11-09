@@ -1,4 +1,5 @@
 import { TicketExecution } from './Execution'
+import { TicketActivity } from './TicketActivity'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Trash2 } from 'lucide-react'
 import {
@@ -23,12 +24,14 @@ import {
 import { friendlyError } from '../lib/supabase'
 import { Modal, Spinner } from './ui'
 import { Assistant } from './Assistant'
-import { RichText } from './RichText'
+import { RichText, embeddedImage } from './RichText'
+import { duplicateTicket, ticketMarkdown } from '../lib/ticketTools'
 
 export function TicketForm({
   assistantEnabled = false,
   ticket,
   project,
+  projects = [],
   tickets,
   initialStatus = 'todo',
   initialParent,
@@ -37,10 +40,12 @@ export function TicketForm({
   onDelete,
   onOpen,
   onNewChild,
+  onUpdated,
 }: {
   assistantEnabled?: boolean
   ticket?: Ticket
   project: Project
+  projects?: Project[]
   tickets: Ticket[]
   initialStatus?: Status
   initialParent?: string
@@ -49,6 +54,7 @@ export function TicketForm({
   onDelete: () => void
   onOpen: (ticket: Ticket) => void
   onNewChild: (ticket: Ticket) => void
+  onUpdated: (ticket: Ticket) => void
 }) {
   const initial: TicketInput = ticketLinks({
     project_id: project.id,
@@ -67,7 +73,9 @@ export function TicketForm({
     [error, setError] = useState('')
   const [preview, setPreview] = useState(false),
     [search, setSearch] = useState(''),
-    [localSaved, setLocalSaved] = useState(false)
+    [localSaved, setLocalSaved] = useState(false),
+    [copyProject, setCopyProject] = useState(project.id),
+    [copied, setCopied] = useState(false)
   const [recovery, setRecovery] = useState<TicketDraft[]>(() => {
     try {
       return listTicketDrafts(project.owner_id).filter(
@@ -77,6 +85,7 @@ export function TicketForm({
       return []
     }
   })
+  const imageInput = useRef<HTMLInputElement>(null)
   const latest = useRef(input),
     baseline = useRef(initial),
     version = useRef(ticket?.updated_at),
@@ -114,6 +123,24 @@ export function TicketForm({
     latest.current = next
     setInput(next)
     persist(next)
+  }
+  async function addImage(file: File) {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const markdown = await embeddedImage(file)
+      if (!mounted.current) return
+      if (latest.current.description.length + markdown.length > 12000)
+        throw new Error(
+          'Cette image dépasse la place disponible dans le ticket (12 000 caractères au total). Ajoutez-la à une note ou choisissez une image plus petite.',
+        )
+      edit({ ...latest.current, description: latest.current.description + markdown })
+    } catch (e) {
+      if (mounted.current) setError(friendlyError(e))
+    } finally {
+      if (mounted.current) setBusy(false)
+    }
   }
   function clearSavedDraft() {
     removeTicketDraft(project.owner_id, draftId.current)
@@ -268,12 +295,19 @@ export function TicketForm({
         <button className="text-button" onClick={() => setPreview(!preview)}>
           {preview ? 'Masquer le rendu' : 'Lire la description'}
         </button>
-        {preview && <RichText text={input.description} />}
+        {preview && (
+          <RichText
+            text={input.description}
+            tickets={tickets.filter((candidate) => candidate.project_id === project.id)}
+            onTicket={(target) => void navigate(() => onOpen(target))}
+          />
+        )}
         <Assistant
           targetId={ticket?.id}
           enabled={assistantEnabled}
           text={input.description}
           onApply={(description) => {
+            if (busy) return
             if (description.length > 12000)
               setError(
                 'Le résultat dépasse les 12 000 caractères du ticket. Copiez-le dans une note.',
@@ -283,11 +317,119 @@ export function TicketForm({
         />
       </div>
       {ticket && (
+        <details className="ticket-tools">
+          <summary>Copier ou dupliquer le ticket</summary>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={async () => {
+              setError('')
+              try {
+                await navigator.clipboard.writeText(
+                  ticketMarkdown({ ...input, number: ticket.number }, project.name, tickets),
+                )
+                setCopied(true)
+              } catch {
+                setError(
+                  'Copie impossible dans ce navigateur. Sélectionnez le texte ou exportez le projet en Markdown.',
+                )
+              }
+            }}
+          >
+            Copier en Markdown
+          </button>
+          {copied && <p role="status">Ticket copié en Markdown.</p>}
+          <label className="field">
+            Projet de la copie
+            <select
+              value={copyProject}
+              disabled={busy}
+              onChange={(event) => setCopyProject(event.target.value)}
+            >
+              {(projects.length ? projects : [project])
+                .filter((candidate) => candidate.owner_id === project.owner_id)
+                .map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <p>
+            La copie commence en To do, sans exécution. Dans un autre projet, les liens parent et
+            prérequis sont retirés.
+          </p>
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy || dirty()}
+            onClick={async () => {
+              setBusy(true)
+              setError('')
+              try {
+                const saved = await onSave(duplicateTicket(latest.current, copyProject))
+                onOpen(saved)
+              } catch (e) {
+                setError(friendlyError(e))
+              } finally {
+                if (mounted.current) setBusy(false)
+              }
+            }}
+          >
+            Dupliquer le ticket
+          </button>
+          {dirty() && <p>Enregistrez les modifications avant de dupliquer.</p>}
+        </details>
+      )}
+      {ticket && (
         <TicketExecution
           ticket={ticket}
           tickets={tickets}
           enabled={assistantEnabled}
           unsaved={dirty()}
+        />
+      )}
+      {ticket && (
+        <TicketActivity
+          ticket={ticket}
+          enabled={assistantEnabled}
+          unsaved={dirty()}
+          expectedVersion={version.current || ticket.updated_at}
+          busy={busy}
+          onBusy={setBusy}
+          onUpdated={(saved) => {
+            const {
+              project_id,
+              title,
+              description,
+              status,
+              priority,
+              difficulty,
+              position,
+              depends_on_id,
+              prerequisite_ids,
+              parent_id,
+            } = saved
+            const next = ticketLinks({
+              project_id,
+              title,
+              description,
+              status,
+              priority,
+              difficulty,
+              position,
+              depends_on_id,
+              prerequisite_ids,
+              parent_id,
+            })
+            latest.current = next
+            baseline.current = next
+            version.current = saved.updated_at
+            setInput(next)
+            clearSavedDraft()
+            onUpdated(saved)
+          }}
         />
       )}
       <form
@@ -318,9 +460,43 @@ export function TicketForm({
               maxLength={12000}
               value={input.description}
               onChange={(e) => edit({ ...input, description: e.target.value })}
+              onPaste={(event) => {
+                const image = [...event.clipboardData.files].find((file) =>
+                  file.type.startsWith('image/'),
+                )
+                if (image) {
+                  event.preventDefault()
+                  void addImage(image)
+                }
+              }}
               placeholder="Le contexte, le résultat attendu, les détails à garder en tête…"
             />
           </label>
+          <div className="ticket-image-tools">
+            <input
+              ref={imageInput}
+              type="file"
+              hidden
+              accept="image/png,image/jpeg,image/webp"
+              aria-label="Image du ticket"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) void addImage(file)
+              }}
+            />
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => imageInput.current?.click()}
+            >
+              Ajouter une petite image
+            </button>
+            <small>
+              {input.description.length.toLocaleString('fr-FR')} / 12 000 caractères, image
+              comprise. Les images volumineuses vont dans les notes.
+            </small>
+          </div>
           <div className="form-grid">
             <label className="field">
               Statut

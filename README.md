@@ -4,6 +4,14 @@
 
 Application personnelle de projets, kanban et notes. Interface React / TypeScript adaptée à l’ordinateur et au téléphone, déployable sur GitHub Pages. Supabase assure l’authentification et le stockage privé. Un service local reçoit les demandes et peut lancer une session Codex par ticket, après autorisation du dépôt et vérification de son isolation.
 
+## MCP : Claude, Codex et Vibe
+
+Le serveur MCP local permet aux trois clients de lire, créer, rechercher et traiter les tickets autorisés. Il conserve l’historique des descriptions et exige une validation humaine après le rapport. Les clients travaillent dans le dépôt choisi, sans copie imposée. Le serveur ne lance pas de modèle et ne remplace pas le bouton Run : le client déjà ouvert fournit son modèle et ses outils.
+
+**Sur ce PC, les trois clients sont enregistrés. Il reste à activer le compte agent et la migration 009 dans Supabase : [guide MCP pas à pas](mcp/README.md).** Aucun port entrant à ouvrir, aucun secret dans GitHub ou le navigateur. Les droits sur les fichiers restent ceux du client utilisé ; MCP n’est pas une isolation de ses commandes.
+
+Ajouts navigateur : historique restaurable, rapport et validation, copie Markdown, duplication de ticket vers un projet, liens entre tickets, tri par projet et instructions de réécriture conservées par compte sur l’appareil.
+
 ## V1.0 : application installable et assistant PC
 
 - [Brancher Supabase, la double authentification et le PC](docs/CONNEXION-PC.md)
