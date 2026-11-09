@@ -1,3 +1,4 @@
+import { networkOptions } from './network.js'
 import { EnvHttpProxyAgent, fetch as proxyFetch } from 'undici'
 
 // Respect the client's HTTP(S)_PROXY / NO_PROXY environment without changing it.
@@ -5,7 +6,7 @@ import { EnvHttpProxyAgent, fetch as proxyFetch } from 'undici'
 export function createTransport(options?: ConstructorParameters<typeof EnvHttpProxyAgent>[0]) {
   let dispatcher: EnvHttpProxyAgent | undefined
   const transport: typeof fetch = async (input, init) => {
-    dispatcher ??= new EnvHttpProxyAgent(options)
+    dispatcher ??= new EnvHttpProxyAgent(options ?? networkOptions())
     return await proxyFetch(input as string, {
       ...init,
       dispatcher,
