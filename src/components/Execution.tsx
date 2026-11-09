@@ -150,10 +150,16 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
     [busy, setBusy] = useState(false)
   const selected = bindings.find((b) => b.project_id === project.id)?.repository_id || ''
   const repo = repositories.find((r) => r.id === selected)
+  const [expanded, setExpanded] = useState(!repo)
   return (
-    <details className="repository-panel">
+    <details
+      className="repository-panel"
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
       <summary>
-        <Monitor size={16} /> {repo ? `Dépôt : ${repo.label}` : 'Associer un dépôt sur le PC'}
+        <Monitor size={16} />{' '}
+        {repo ? `Dépôt : ${repo.label}` : 'Choisir le dossier de ce projet sur le PC'}
       </summary>
       {!enabled ? (
         <p>
@@ -162,8 +168,9 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
         </p>
       ) : (
         <>
+          <RepositoryPath key={project.id} projectId={project.id} />
           <label>
-            Dépôt autorisé
+            Ou réutiliser un dépôt déjà associé
             <select
               aria-label="Dépôt du projet"
               value={selected}
@@ -203,7 +210,7 @@ export function ProjectRepository({ project, enabled }: { project: Project; enab
             branche de travail, ses commits et ses tests. La validation et la fusion restent
             humaines.
           </p>
-          <RepositoryPath projectId={project.id} />
+
           <small>
             {connected
               ? 'Suivi en direct connecté'

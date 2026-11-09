@@ -58,10 +58,15 @@ export function RepositoryPath({ projectId }: { projectId: string }) {
   const refresh = () => window.dispatchEvent(new Event('atelier-execution-refresh'))
   return (
     <div className="repository-path-form">
-      <h3>Indiquer un chemin sur le PC</h3>
+      <h3>Choisir un dossier propre à ce projet</h3>
       <p>
         Codex travaillera directement dans ce dossier. Le chemin est celui du PC, même depuis votre
         téléphone.
+      </p>
+      <p>
+        Sur le PC, ouvrez le dossier dans Fichiers, faites Ctrl + L puis copiez son chemin ici. Pour
+        une chanson, vous pouvez choisir un nouveau dossier vide, par exemple
+        /home/mblaret/Documents/chanson. Le dossier du kanban n’est pas imposé.
       </p>
       {setupError ? (
         <p role="status">{setupError}</p>

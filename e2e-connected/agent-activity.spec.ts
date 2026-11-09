@@ -92,6 +92,7 @@ for (const conflict of [false, true])
       approvals = 0
     const pageErrors: string[] = []
     page.on('pageerror', (error) => pageErrors.push(error.message))
+    let selectedProjects: string[] = []
     await page.route('https://qa.supabase.co/**', async (route) => {
       const path = new URL(route.request().url()).pathname,
         body = route.request().postDataJSON()
@@ -100,8 +101,14 @@ for (const conflict of [false, true])
       if (path.includes('/auth/v1/token')) data = session
       else if (path.includes('/auth/v1/user')) data = user
       else if (path.endsWith('/rpc/can_access_atelier')) data = true
-      else if (path.endsWith('/rpc/atelier_schema_version')) data = 9
-      else if (path.endsWith('/projects')) data = [project]
+      else if (path.endsWith('/rpc/atelier_schema_version')) data = 10
+      else if (path.endsWith('/rpc/agent_workspace_state'))
+        data = { project_ids: selectedProjects, registered: true }
+      else if (path.endsWith('/rpc/set_agent_project')) {
+        expect(body).toEqual({ p_project: pid, p_enabled: true })
+        selectedProjects = [pid]
+        data = { project_ids: selectedProjects, registered: true }
+      } else if (path.endsWith('/projects')) data = [project]
       else if (path.endsWith('/tickets')) data = [ticket]
       else if (path.endsWith('/rpc/ticket_agent_activity')) data = { claim, history }
       else if (path.endsWith('/rpc/restore_ticket_description')) {
@@ -134,6 +141,12 @@ for (const conflict of [false, true])
     await page.getByLabel('Mot de passe', { exact: true }).fill('qa-password')
     await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
     await page.getByRole('button', { name: 'Ouvrir Projet MCP', exact: true }).click()
+    await page
+      .getByRole('button', { name: 'Utiliser ce projet avec les agents', exact: true })
+      .click()
+    await expect(
+      page.getByRole('button', { name: 'Retirer l’accès des agents', exact: true }),
+    ).toBeVisible()
     await page.locator('.ticket-open').filter({ hasText: 'Ticket agent' }).click()
     const activity = page.getByRole('region', { name: 'Travail des agents et historique' })
     await expect(

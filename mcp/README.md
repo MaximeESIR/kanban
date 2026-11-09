@@ -45,53 +45,33 @@ en charge déjà active empêche un deuxième appel de prise en charge du ticket
 même depuis un autre client utilisant ce compte. Le nom affiché dans les rapports
 sera donc commun : **Agent MCP local**.
 
-### 3. Retrouver le projet que tu veux autoriser
+### 3. Autoriser le compte une seule fois
 
-Ouvre une [nouvelle requête SQL](https://supabase.com/dashboard/project/szutxqgfapqsmkixvvwy/sql/new),
-colle ce bloc, puis clique sur **Run** :
+Après la migration009, exécute aussi `010_agent_project_selection.sql` depuis
+`/home/mblaret/Documents/kanban/supabase/migrations/010_agent_project_selection.sql`
+dans une nouvelle requête SQL. Copie tout le contenu du fichier, puis Run.
 
-```sql
-select id, name
-from public.projects
-where owner_id = 'cb849917-8c0e-4081-843f-109a8f9ede2f'::uuid
-order by name;
-```
-
-Dans le résultat, retrouve ton projet par son nom et copie la valeur de la
-colonne **id**. Si aucune ligne n'apparaît, crée d'abord un projet dans
-[Atelier](https://maximeesir.github.io/kanban/), puis relance cette requête.
-
-### 4. Autoriser ce compte sur ce projet seulement
-
-Ouvre une [nouvelle requête SQL](https://supabase.com/dashboard/project/szutxqgfapqsmkixvvwy/sql/new).
-Colle le bloc suivant. Remplace **seulement les deux textes en majuscules** par
-les identifiants copiés aux étapes 2 et 3 ; conserve les apostrophes. Ton
-identifiant personnel est déjà renseigné.
+Dans une autre requête SQL, remplace uniquement `AGENT_AUTH_UUID` ci-dessous par
+le User ID du compte technique. Aucun identifiant de projet n’est nécessaire :
 
 ```sql
-do $$
-declare
-  agent_uuid uuid := 'COLLER_ICI_LE_USER_ID_DU_COMPTE_MCP';
-  projet_uuid uuid := 'COLLER_ICI_ID_DU_PROJET';
-  proprietaire_uuid uuid := 'cb849917-8c0e-4081-843f-109a8f9ede2f';
-begin
-  insert into private.ticket_agents(user_id, owner_id, label)
-  values (agent_uuid, proprietaire_uuid, 'Agent MCP local')
-  on conflict(user_id) do update set label=excluded.label, enabled=true;
-
-  insert into private.ticket_agent_projects(agent_id, owner_id, project_id)
-  values (agent_uuid, proprietaire_uuid, projet_uuid)
-  on conflict(agent_id,project_id) do nothing;
-end $$;
+insert into private.ticket_agents(user_id, owner_id, label, all_projects)
+values ('AGENT_AUTH_UUID'::uuid,
+        'cb849917-8c0e-4081-843f-109a8f9ede2f'::uuid,
+        'Agent MCP local', true)
+on conflict(user_id) do update set enabled=true, all_projects=true;
 ```
 
-Clique sur **Run**. Résultat attendu : **Success. No rows returned**.
-Pour autoriser un deuxième projet, recommence les étapes 3 et 4 avec son
-identifiant et le **même User ID MCP**. Les nouveaux projets ne sont pas autorisés
-automatiquement.
+### 4. Sélectionner le projet dans l’application
 
-Le modèle générique et les commandes de révocation sont aussi dans
-[authorize-agent.sql](../supabase/authorize-agent.sql).
+Ouvre le projet souhaité dans Atelier, puis clique **Utiliser ce projet avec les agents**.
+Ce choix est commun à Claude, Codex et Vibe. Plusieurs projets peuvent être activés simultanément. Seuls ces projets sont
+accessibles, y compris pour la recherche. Désigne explicitement un projet et un ticket
+à chaque session ; deux sessions peuvent traiter deux projets différents. Les futurs projets se sélectionnent avec le même bouton,
+sans nouvelle commande SQL. **Retirer l’accès des agents** désélectionne le projet.
+Termine, valide ou annule le travail en cours sur un projet avant de lui retirer l’accès.
+Le changement n’efface pas les informations déjà lues : démarre une nouvelle session
+du client pour séparer les contextes. La sélection ne lance aucun développement.
 
 ### 5. Enregistrer le mot de passe sur ton PC
 

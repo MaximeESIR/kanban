@@ -564,3 +564,70 @@ it('bounds hourly mutations without breaking a successful retry', async () => {
     '120 modifications',
   )
 })
+
+it('010 allows future projects but only human-selected projects, never cross-owner access', async () => {
+  await db.exec('reset role')
+  await db.exec(await readFile('supabase/migrations/010_agent_project_selection.sql', 'utf8'))
+  await db.exec(
+    "update public.agent_ticket_claims set state='cancelled'; delete from private.ticket_tool_receipts;",
+  )
+  await as(A)
+  await expect(rpc('set_agent_project', [Q, true])).rejects.toThrow('MFA')
+  await as(M)
+  await expect(rpc('set_agent_project', [Q, true])).rejects.toThrow('MFA')
+  await as(A, 'aal2')
+  await expect(rpc('set_agent_project', [OTHER, true])).rejects.toThrow('inaccessible')
+  await rpc('set_agent_project', [Q, true])
+  await as(M)
+  expect((await rpc('agent_list_projects')).projects.map((p: any) => p.id)).toEqual([Q])
+  await expect(rpc('agent_list_tickets', [P])).rejects.toThrow('sélectionné')
+  const ticket = (await rpc('agent_create_ticket', [crypto.randomUUID(), Q, { title: 'Chanson' }]))
+    .ticket
+  expect((await rpc('agent_search_tickets', ['Chanson'])).tickets[0].id).toBe(ticket.id)
+  const claimed = await rpc('agent_claim_ticket', [
+    crypto.randomUUID(),
+    ticket.id,
+    ticket.updated_at,
+  ])
+  await as(A, 'aal2')
+  await rpc('set_agent_project', [P, true])
+  await as(M)
+  expect((await rpc('agent_list_projects')).projects.map((p: any) => p.id).sort()).toEqual(
+    [P, Q].sort(),
+  )
+  await as(A, 'aal2')
+  await expect(rpc('set_agent_project', [Q, false])).rejects.toThrow('prise en charge')
+  await rpc('cancel_agent_claim', [
+    crypto.randomUUID(),
+    ticket.id,
+    claimed.claim.id,
+    claimed.ticket.updated_at,
+  ])
+  await rpc('set_agent_project', [Q, false])
+  await as(M)
+  await expect(rpc('agent_get_ticket', [ticket.id])).rejects.toThrow('inaccessible')
+  expect((await rpc('agent_search_tickets', ['Chanson'])).tickets).toEqual([])
+  await expect(
+    rpc('agent_update_ticket', [
+      crypto.randomUUID(),
+      ticket.id,
+      ticket.updated_at,
+      { title: 'Non' },
+    ]),
+  ).rejects.toThrow()
+  await as(A, 'aal2')
+  await rpc('set_agent_project', [P, false])
+  const future = crypto.randomUUID()
+  await db.query('insert into public.projects(id,owner_id,name) values($1,$2,$3)', [
+    future,
+    A,
+    'Futur',
+  ])
+  await rpc('set_agent_project', [future, true])
+  await as(N)
+  expect((await rpc('agent_list_projects')).projects.map((p: any) => p.id)).toEqual([future])
+  await as(A, 'aal2')
+  await rpc('set_agent_project', [future, false])
+  await as(M)
+  expect((await rpc('agent_list_projects')).projects).toEqual([])
+})

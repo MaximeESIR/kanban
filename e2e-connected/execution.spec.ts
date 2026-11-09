@@ -209,7 +209,7 @@ test('Run tolerates a fast device clock, live events update progress, human appr
   await page.getByRole('button', { name: 'Se connecter', exact: true }).click()
   await page.getByRole('button', { name: 'Ouvrir Déploiement Jetson' }).click()
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled()
-  await page.locator('.repository-panel summary').click()
+  await expect(page.locator('.repository-panel')).toHaveAttribute('open', '')
   await page.getByLabel('Chemin du projet sur le PC').fill('/home/test/repos/jetson')
   await page.getByRole('button', { name: 'Vérifier et associer', exact: true }).click()
   await expect(page.getByText('Chemin envoyé — en attente du PC.')).toBeVisible()

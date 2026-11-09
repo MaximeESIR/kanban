@@ -124,3 +124,17 @@ statut du ticket. Les modifications émettent l'événement `workspace` existant
 
 Les messages sont affichables en français. Le navigateur et le serveur MCP
 doivent conserver ces erreurs comme des échecs, sans annoncer de réussite.
+
+## Migration 010 — activation de projets dans l’application
+
+`all_projects=true` rend les projets actuels et futurs éligibles, sans les exposer
+par défaut. `private.agent_workspace` contient les projets activés par le propriétaire.
+`agent_workspace_state()` renvoie `{project_ids: UUID[], registered: boolean}` ;
+`set_agent_project(p_project UUID, p_enabled boolean)` active ou retire un projet
+avec MFA. Plusieurs projets peuvent être actifs. Retrait refusé si ce projet possède
+un claim running/review. Verrou transactionnel partagé entre sélection et appels MCP.
+Les comptes hérités en mode explicite gardent leur liste jusqu’au premier choix web.
+Chaque session reçoit explicitement son projet/ticket ; l’autorisation des projets
+est commune au compte MCP, pas une isolation entre les clients du même compte.
+La désactivation ne révoque pas les informations déjà lues ni les droits locaux
+sur les fichiers d’un client déjà lancé.

@@ -1,3 +1,4 @@
+import { AgentProject } from './AgentProject'
 import { BrowserSearch } from './BrowserSearch'
 import { ProjectRepository, TicketExecution } from './Execution'
 import { Assistant } from './Assistant'
@@ -392,6 +393,7 @@ export function Board({
         </div>
       </header>
       {project.description && <p className="board-description">{project.description}</p>}
+      <AgentProject projectId={project.id} enabled={assistantEnabled} />
       <ProjectRepository project={project} enabled={assistantEnabled} />
       <BrowserSearch
         documents={tickets.map((t) => ({
