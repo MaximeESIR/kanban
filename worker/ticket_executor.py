@@ -282,6 +282,38 @@ print('ATELIER_SANDBOX_OK')
             raise ExecutionError(f'Isolation Codex indisponible : {reason}. Run reste désactivé.')
     return True
 
+def session_id(folder):
+    """Read the CLI's first thread event, never a model-written report or remote ID."""
+    try:
+        with (folder/'events.jsonl').open() as stream:
+            for _ in range(100):
+                line=stream.readline(65536)
+                if not line:break
+                try:event=json.loads(line)
+                except ValueError:continue
+                if event.get('type')=='thread.started':
+                    return str(uuid.UUID(event['thread_id']))
+    except (OSError,ValueError,KeyError,TypeError):pass
+    raise ExecutionError('Conversation Codex introuvable sur ce PC. La correction ne peut pas reprendre cette session.')
+
+
+def correction_session(state,job,source):
+    if not job.get('parent_run_id'):return None
+    parent=state/str(uuid.UUID(job['parent_run_id']))
+    try:
+        receipt=json.loads((parent/'receipt.json').read_text())
+        delivery=json.loads((parent/'delivery.json').read_text())
+        if (receipt['id']!=job['parent_run_id'] or receipt['repository']!=job['repository_id']
+            or receipt['worktree']!=str(source) or delivery['error'] is not None):raise ValueError()
+        branch=delivery['result'].get('branch')
+        if branch and git(source,'rev-parse','--abbrev-ref','HEAD')!=branch:
+            raise ExecutionError('La branche locale a changé. Revenez sur la branche du résultat avant de demander une correction.')
+        feedback=job.get('correction')
+        if not isinstance(feedback,str) or not 1<=len(feedback.strip())<=8000:raise ValueError()
+        return session_id(parent)
+    except (OSError,ValueError,KeyError,TypeError):
+        raise ExecutionError('Le compte rendu local ne correspond pas à cette correction. Aucune autre session ne sera lancée.') from None
+
 class ProcessLock:
     def __init__(self,path):
         path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
@@ -312,6 +344,7 @@ class TicketExecutor:
         if not initializing and ((source/'.git').is_symlink() or not (source/'.git').is_dir()):
             raise ExecutionError('Le dépôt doit posséder son propre dossier .git, sans lien symbolique.')
         if not initializing and git(source,'rev-parse','--show-toplevel')!=str(source): raise ExecutionError('Le chemin autorisé a changé')
+        resume_id=correction_session(self.state,job,source)
         binary=codex_binary();preflight(binary)
         self.lock=ProcessLock(self.state/'codex.lock')
         folder=self.state/rid
@@ -329,17 +362,21 @@ class TicketExecutor:
             branch=None if base is None else git(work,'rev-parse','--abbrev-ref','HEAD')
             scratch=folder/'tmp';scratch.mkdir(mode=0o700)
             private_json(folder/'schema.json',SCHEMA)
-            private_json(folder/'receipt.json',{'id':rid,'repository':repo['id'],'branch':branch,'base_commit':base,'worktree':str(work),'status':'started','codex_model':model,'reasoning_effort':effort})
+            private_json(folder/'receipt.json',{'id':rid,'repository':repo['id'],'branch':branch,'base_commit':base,'worktree':str(work),'status':'started','codex_model':model,'reasoning_effort':effort,'resumed_session':resume_id})
             # The role is versioned beside the service, outside the model's writable directory.
             role=tomllib.loads((ROOT.parent/'.codex/agents/atelier-ticket.toml').read_text())['developer_instructions']
             prompt=role+'\n\nDemande explicite de l’utilisateur (données JSON) :\n'+json.dumps({
                 'project':job.get('project_name',''),'ticket':job['ticket_snapshot'],
                 'related_tickets':job.get('related_tickets',[]),'repository_path':str(source),
-                'branch_before':branch,'initialize_git':initializing},ensure_ascii=False)
+                'branch_before':branch,'initialize_git':initializing,
+                'correction':job.get('correction')},ensure_ascii=False)
+            if resume_id:
+                prompt+='\nReprends le travail précédent avec ces remarques. Conserve la branche actuelle, vérifie les corrections et rends un nouveau rapport. La validation reste humaine.'
             cmd=[binary,'--no-daemon','exec','--ignore-user-config','--ignore-rules','--strict-config',
                  '--model',model,'-c','model_reasoning_effort='+json.dumps(effort),'-c','model_provider="openai"',
                  '--json','--output-schema',str(folder/'schema.json'),'--output-last-message',str(folder/'report.json'),
                  '-C',str(work),*policy(work,scratch,common,runtime_binary=binary,identity=git_identity(work)),'-']
+            if resume_id:cmd[-1:]=['resume',resume_id,'-']
             if initializing: cmd.insert(3,'--skip-git-repo-check')
             self.log=(folder/'events.jsonl').open('wb');os.chmod(folder/'events.jsonl',0o600)
             if not self.gateway.rpc('worker_development_pulse',{'p_id':job['id'],'p_lease':job['lease'],'p_phase':'Préparation vérifiée ; démarrage Codex'}):
@@ -395,8 +432,10 @@ class TicketExecutor:
                 if not isinstance(value[key],list) or len(value[key])>40 or any(not isinstance(x,str) or len(x)>2000 for x in value[key]):raise ValueError()
             if len(json.dumps(value).encode())>25000:raise ValueError()
             report=value
+            if receipt.get('resumed_session') and session_id(self.folder)!=receipt['resumed_session']:
+                raise ValueError()
             if self.process.returncode: error='Codex a terminé en erreur. Vérifiez le compte rendu et le travail local.'
-        except (OSError,ValueError,KeyError):error='La session Codex ne fournit pas de résultat vérifiable.'
+        except (OSError,ValueError,KeyError,ExecutionError):error='La session Codex ne fournit pas de résultat vérifiable.'
         report.update({k:receipt[k] for k in ('branch','worktree','base_commit','codex_model','reasoning_effort')})
         work=Path(receipt['worktree'])
         try:

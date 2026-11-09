@@ -1,3 +1,4 @@
+import { boundedRequest } from '../lib/boundedRequest'
 import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react'
 import { Play, Monitor, Check } from 'lucide-react'
 import { supabase, friendlyError } from '../lib/supabase'
@@ -29,6 +30,7 @@ type Run = {
   ticket_id: string
   status: 'queued' | 'running' | 'review' | 'approved' | 'failed' | 'cancelled'
   phase: string
+  correction?: string | null
   error: string | null
   codex_model?: string | null
   reasoning_effort?: string | null
@@ -80,12 +82,12 @@ export function ExecutionProvider({
           supabase!.from('project_repositories').select('*'),
           supabase!
             .from('development_runs')
-            .select('id,ticket_id,status,phase,error,result,codex_model,reasoning_effort')
+            .select('*')
             .order('created_at', { ascending: false })
             .limit(200),
           supabase!
             .from('development_runs')
-            .select('id,ticket_id,status,phase,error,result,codex_model,reasoning_effort')
+            .select('*')
             .in('status', ['queued', 'running', 'review'])
             .order('created_at', { ascending: false }),
         ])
@@ -139,7 +141,9 @@ export function ExecutionProvider({
 }
 async function action(name: string, params: Record<string, unknown>) {
   if (!supabase || !navigator.onLine) throw new Error('Une connexion sécurisée est nécessaire.')
-  const { error } = await supabase.rpc(name, params)
+  const { error } = await boundedRequest((signal) =>
+    supabase!.rpc(name, params).abortSignal(signal),
+  )
   if (error) throw error
   window.dispatchEvent(new Event('atelier-execution-refresh'))
   window.dispatchEvent(new Event('atelier-workspace-refresh'))
@@ -260,6 +264,8 @@ export function TicketExecution({
     [requestId, setRequestId] = useState(''),
     [modelId, setModelId] = useState(''),
     [effort, setEffort] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const correctionRequest = useRef<{ key: string; id: string } | null>(null)
   const [, refreshClock] = useState(0)
   useEffect(() => {
     const timer = setInterval(() => refreshClock((value) => value + 1), 15000)
@@ -299,7 +305,11 @@ export function TicketExecution({
       await action(name, params)
       return true
     } catch (e) {
-      setError(friendlyError(e))
+      setError(
+        (e as { code?: string }).code === 'PGRST202' && name === 'request_development_correction'
+          ? 'La correction nécessite la mise à jour Supabase 011_development_corrections.sql et le redémarrage du service PC.'
+          : friendlyError(e),
+      )
       return false
     } finally {
       setBusy(false)
@@ -483,6 +493,21 @@ export function TicketExecution({
               )}
             </div>
           )}
+          {runs.some((entry) => entry.ticket_id === ticket.id && entry.id !== run?.id) && (
+            <details>
+              <summary>Résultats précédents</summary>
+              {runs
+                .filter((entry) => entry.ticket_id === ticket.id && entry.id !== run?.id)
+                .map((entry) => (
+                  <div className="run-report" key={entry.id}>
+                    <strong>{entry.phase}</strong>
+                    {entry.correction && <p>Votre demande : {entry.correction}</p>}
+                    <p>{entry.result?.summary || entry.error}</p>
+                  </div>
+                ))}
+            </details>
+          )}
+          {run?.correction && <p>Votre demande de correction : {run.correction}</p>}
           {run?.error && <p role="alert">{run.error}</p>}
           {run?.status === 'review' && (
             <>
@@ -490,6 +515,44 @@ export function TicketExecution({
                 Vérifiez les changements et les tests. Valider ferme le ticket ; la fusion du code
                 reste à faire sur le PC.
               </p>
+              <label className="field">
+                Corrections à demander à Codex
+                <textarea
+                  value={feedback}
+                  maxLength={8000}
+                  disabled={busy}
+                  onChange={(event) => setFeedback(event.target.value)}
+                  placeholder="Expliquez ce qui ne va pas et le résultat attendu…"
+                />
+              </label>
+              <p>
+                La même conversation reprend sur le PC, avec le même modèle et le même effort. Le
+                ticket reste en cours.
+              </p>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={busy || Boolean(reason) || !feedback.trim()}
+                onClick={async () => {
+                  const key = JSON.stringify([run.id, feedback.trim(), ticket.updated_at])
+                  if (correctionRequest.current?.key !== key)
+                    correctionRequest.current = { key, id: crypto.randomUUID() }
+                  if (
+                    await call('request_development_correction', {
+                      p_id: correctionRequest.current.id,
+                      p_run: run.id,
+                      p_version: ticket.updated_at,
+                      p_feedback: feedback.trim(),
+                    })
+                  ) {
+                    setFeedback('')
+                    correctionRequest.current = null
+                  }
+                }}
+              >
+                Envoyer les corrections à Codex
+              </button>
+              {reason && <p role="status">{reason}</p>}
               <button
                 type="button"
                 className="button primary"

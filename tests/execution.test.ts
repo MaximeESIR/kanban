@@ -47,6 +47,9 @@ beforeAll(async () => {
     '005_ticket_execution',
     '006_codex_selection',
     '007_repository_paths',
+    '009_ticket_agents',
+    '010_agent_project_selection',
+    '011_development_corrections',
   ])
     await db.exec(await readFile(`supabase/migrations/${name}.sql`, 'utf8'))
   await db.exec(
@@ -331,6 +334,68 @@ it('rejects malformed paths, preserves bindings on failures, and cancels a stale
     (await db.query<any>('select error from repository_requests where id=$1', [other])).rows[0]
       .error,
   ).toBe('Dossier absent')
+})
+
+it('corrections require the owner MFA, preserve reports, are idempotent and keep human review', async () => {
+  const t = await ticket(),
+    id = crypto.randomUUID(),
+    next = crypto.randomUUID()
+  await rpc('submit_development', [id, t.id, t.updated_at])
+  await as(W)
+  const first = await rpc('worker_development_claim', [[R]])
+  await rpc('worker_development_finish', [id, first.lease, { summary: 'Première version' }, null])
+  await as(A)
+  const version = (await db.query<any>('select updated_at from tickets where id=$1', [t.id]))
+    .rows[0].updated_at
+  for (const [who, aal] of [
+    [B, 'aal2'],
+    [A, 'aal1'],
+    [W, 'aal1'],
+  ]) {
+    await as(who, aal)
+    await expect(
+      rpc('request_development_correction', [next, id, version, 'Corriger le refrain']),
+    ).rejects.toThrow()
+  }
+  await as(A)
+  await expect(rpc('request_development_correction', [next, id, version, '  '])).rejects.toThrow(
+    'Décrivez',
+  )
+  await expect(
+    rpc('request_development_correction', [next, id, t.updated_at, 'Corriger le refrain']),
+  ).rejects.toThrow('Actualisez')
+  expect(
+    (await db.query<any>('select status from development_runs where id=$1', [id])).rows[0].status,
+  ).toBe('review')
+  expect(
+    await rpc('request_development_correction', [next, id, version, 'Corriger le refrain']),
+  ).toBe(next)
+  expect(
+    await rpc('request_development_correction', [next, id, version, 'Corriger le refrain']),
+  ).toBe(next)
+  await expect(
+    rpc('request_development_correction', [next, id, version, 'Autre demande']),
+  ).rejects.toThrow('autre contenu')
+  await expect(
+    rpc('request_development_correction', [crypto.randomUUID(), id, version, 'Doublon']),
+  ).rejects.toThrow('Aucun résultat')
+  expect(
+    (await db.query<any>('select result from development_runs where id=$1', [id])).rows[0].result
+      .summary,
+  ).toBe('Première version')
+  await as(W)
+  const correction = await rpc('worker_development_claim', [[R]])
+  expect(correction.parent_run_id).toBe(id)
+  expect(correction.correction).toBe('Corriger le refrain')
+  expect(correction.codex_model).toBe(first.codex_model)
+  await rpc('worker_development_finish', [next, correction.lease, { summary: 'Corrigé' }, null])
+  await as(A)
+  const updated = (await db.query<any>('select * from tickets where id=$1', [t.id])).rows[0]
+  expect(updated.status).toBe('in_progress')
+  await rpc('approve_development', [next, updated.updated_at])
+  expect(
+    (await db.query<any>('select status from tickets where id=$1', [t.id])).rows[0].status,
+  ).toBe('done')
 })
 
 it('allows account deletion cascades without re-creating orphan notifications', async () => {

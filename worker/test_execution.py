@@ -32,6 +32,7 @@ assert 'Aucun résultat' not in prompt
 (work/'hello.py').write_text('answer = 42\\n')
 exec((work/'hello.py').read_text());assert answer==42
 report.write_text(json.dumps({'summary':'Valeur corrigée','tests':['assert answer == 42 : OK'],'limitations':[]}))
+print(json.dumps({'type':'thread.started','thread_id':'20000000-0000-4000-8000-000000000001'}))
 print(json.dumps({'type':'turn.completed'}))
 ''');self.binary.chmod(0o700)
         self.job={'id':'10000000-0000-4000-8000-000000000001','repository_id':self.row['id'],'lease':'lease','ticket_snapshot':{'title':'Corriger la valeur'},'project_name':'Test','codex_model':'gpt-6.1-sol','reasoning_effort':'high'}
@@ -58,6 +59,52 @@ print(json.dumps({'type':'turn.completed'}))
         self.assertEqual(data['p_result']['codex_model'],'gpt-6.1-sol')
         self.assertEqual(data['p_result']['reasoning_effort'],'high')
         with self.assertRaises(FileExistsError):self.start()
+    def test_correction_resumes_exact_session_and_keeps_isolation(self):
+        self.start();self.runner.process.wait(timeout=10);self.runner.tick()
+        parent=self.job['id']
+        self.job={**self.job,'id':'10000000-0000-4000-8000-000000000002','parent_run_id':parent,'correction':'Change the refrain'}
+        self.start()
+        args=self.runner.process.args
+        self.assertEqual(args[-3:],['resume','20000000-0000-4000-8000-000000000001','-'])
+        self.assertIn('permissions.atelier.network.enabled=false',args)
+        self.assertIn('shell_environment_policy.inherit="none"',args)
+        self.runner.process.wait(timeout=10);self.runner.tick()
+        self.assertIsNone(self.gateway.rpc.call_args.args[1]['p_error'])
+
+    def test_correction_fails_closed_for_missing_receipt_and_changed_repository(self):
+        self.job.update(parent_run_id='10000000-0000-4000-8000-000000000099',correction='Fix')
+        with self.assertRaises(ExecutionError):self.start()
+        self.assertIsNone(self.runner.process)
+        self.job.pop('parent_run_id');self.job.pop('correction')
+        self.start();self.runner.process.wait(timeout=10);self.runner.tick()
+        parent=self.job['id']
+        folder=self.root/'runs'/parent
+        receipt=json.loads((folder/'receipt.json').read_text());receipt['worktree']='/other'
+        private_json(folder/'receipt.json',receipt)
+        self.job={**self.job,'id':'10000000-0000-4000-8000-000000000002','parent_run_id':parent,'correction':'Fix'}
+        with self.assertRaises(ExecutionError):self.start()
+        self.assertIsNone(self.runner.process)
+
+    def test_correction_refuses_changed_branch_and_missing_conversation(self):
+        self.start();self.runner.process.wait(timeout=10);self.runner.tick()
+        parent=self.job['id'];folder=self.root/'runs'/parent
+        self.job={**self.job,'id':'10000000-0000-4000-8000-000000000002','parent_run_id':parent,'correction':'Fix'}
+        branch=subprocess.check_output(['git','-C',str(self.repo),'branch','--show-current'],text=True).strip()
+        subprocess.run(['git','-C',str(self.repo),'checkout','-qb','other'],check=True)
+        with self.assertRaisesRegex(ExecutionError,'branche locale'):self.start()
+        subprocess.run(['git','-C',str(self.repo),'checkout','-q',branch],check=True)
+        (folder/'events.jsonl').write_text('{}\n')
+        with self.assertRaisesRegex(ExecutionError,'Conversation Codex introuvable'):self.start()
+        self.assertIsNone(self.runner.process)
+
+    def test_correction_rejects_a_different_returned_session(self):
+        self.start();self.runner.process.wait(timeout=10);self.runner.tick()
+        parent=self.job['id']
+        self.job={**self.job,'id':'10000000-0000-4000-8000-000000000002','parent_run_id':parent,'correction':'Fix'}
+        self.binary.write_text(self.binary.read_text().replace('20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002'))
+        self.start();self.runner.process.wait(timeout=10);self.runner.tick()
+        self.assertIsNotNone(self.gateway.rpc.call_args.args[1]['p_error'])
+
     def test_selected_model_and_effort_are_explicit_cli_arguments(self):
         self.start()
         args=self.runner.process.args

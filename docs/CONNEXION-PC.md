@@ -294,3 +294,16 @@ Le dossier parent d’un nouveau projet doit déjà exister. Aucun fichier exist
 **Mon travail après ton branchement :** vérifier la connexion réelle, la dictée depuis ton téléphone et un ticket Codex de test, puis corriger les problèmes constatés. Tu n’as pas à réécrire les scripts ou à comprendre leur architecture.
 
 Les mesures et explications techniques sont dans [REFERENCE-PC.md](REFERENCE-PC.md). Elles ne font pas partie des étapes à suivre ici.
+
+## Demander une correction avant Done (sessions Run)
+
+Activation unique de cette mise à jour :
+
+1. Dans le terminal du PC, exécute `sudo systemctl restart atelier-worker.service` puis saisis ton mot de passe Ubuntu.
+2. Ouvre `/home/mblaret/Documents/kanban/supabase/migrations/011_development_corrections.sql` dans VS Code. Clique dans le texte, puis **Ctrl+A**, **Ctrl+C**.
+3. Ouvre [le SQL Editor de ton projet Supabase](https://supabase.com/dashboard/project/szutxqgfapqsmkixvvwy/sql/new). Clique dans la grande zone blanche, colle avec **Ctrl+V**, puis clique sur le bouton vert **Run** en haut à droite. Le résultat attendu est **Success. No rows returned**.
+4. Recharge Atelier après la publication de la mise à jour (sur PC : **Ctrl+Shift+R**).
+
+Lorsqu’un ticket lancé avec **Run** affiche son résultat, remplis **Corrections à demander à Codex**, puis clique **Envoyer les corrections à Codex**. La même conversation reprend avec tes remarques, le même modèle et le même effort. Attends le nouveau rapport avant de choisir entre une nouvelle correction et **Valider et passer à Done**. Le PC doit être connecté et les modifications du ticket enregistrées.
+
+Ne supprime pas les conversations Codex ni les journaux locaux Atelier si tu souhaites les reprendre. Une branche locale différente bloque la reprise avec une explication ; la session d’un autre projet n’est jamais utilisée. Pour une tâche traitée manuellement via MCP, renvoie tes remarques dans la conversation du client concerné (Claude, Codex ou Vibe).

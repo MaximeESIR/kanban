@@ -195,6 +195,21 @@ test('Run tolerates a fast device clock, live events update progress, human appr
         error: null,
       }
       data = body.p_id
+    } else if (p.endsWith('/rpc/request_development_correction')) {
+      expect(body.p_run).toBe(run.id)
+      expect(body.p_version).toBe(ticket.updated_at)
+      expect(body.p_feedback).toBe('Ajouter un test du format de sortie.')
+      expect(run.status).toBe('review')
+      run = {
+        ...run,
+        id: body.p_id,
+        parent_run_id: run.id,
+        correction: body.p_feedback,
+        status: 'queued',
+        phase: 'Correction en attente du PC',
+        result: null,
+      }
+      data = body.p_id
     } else if (p.endsWith('/rpc/approve_development')) {
       expect(run.status).toBe('review')
       expect(body.p_version).toBe(ticket.updated_at)
@@ -283,6 +298,24 @@ test('Run tolerates a fast device clock, live events update progress, human appr
   await expect(page.getByText('Export ONNX ajouté.', { exact: true })).toBeVisible()
   await expect(page.getByText('pytest : 3 réussis', { exact: true })).toBeVisible()
   expect(ticket.status).toBe('in_progress')
+  await expect(page.getByRole('button', { name: 'Envoyer les corrections à Codex' })).toBeDisabled()
+  await page
+    .getByLabel('Corrections à demander à Codex')
+    .fill('Ajouter un test du format de sortie.')
+  await page.getByRole('button', { name: 'Envoyer les corrections à Codex' }).click()
+  await expect(page.getByText('Correction en attente du PC', { exact: true }).last()).toBeVisible()
+  expect(ticket.status).toBe('in_progress')
+  await expect(
+    page.getByRole('button', { name: 'Valider et passer à Done', exact: true }),
+  ).toHaveCount(0)
+  run = {
+    ...run,
+    status: 'review',
+    phase: 'À valider',
+    result: { summary: 'Test du format ajouté.', tests: ['pytest : 4 réussis'], limitations: [] },
+  }
+  notify('runs')
+  await expect(page.getByText('Test du format ajouté.', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Valider et passer à Done', exact: true }).click()
   await expect(page.getByText('Validée par vous', { exact: true }).last()).toBeVisible()
   expect(ticket.status).toBe('done')
