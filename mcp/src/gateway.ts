@@ -1,3 +1,4 @@
+import { environmentFetch } from './transport.js'
 import { ConfigSchema, PublicError, readConfig, type Config } from './config.js'
 
 export const RPC_NAMES = [
@@ -27,7 +28,7 @@ export class Gateway implements RpcGateway {
   private expiresAt = 0
   private authenticating: Promise<void> | undefined
   constructor(private readonly loadConfig: () => Config = readConfig,
-              private readonly transport: typeof fetch = fetch,
+              private readonly transport: typeof fetch = environmentFetch,
               private readonly now: () => number = Date.now) {}
 
   private configuration(): Config {

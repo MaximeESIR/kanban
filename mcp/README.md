@@ -215,3 +215,15 @@ Sources officielles : [SDK MCP](https://modelcontextprotocol.io/docs/sdk),
 [MCP dans Codex](https://learn.chatgpt.com/docs/extend/mcp?surface=cli),
 [MCP dans Claude Code](https://code.claude.com/docs/en/mcp),
 [MCP dans Mistral Vibe](https://docs.mistral.ai/vibe/code/cli/mcp-servers).
+
+
+## Proxy réseau
+
+Le transport utilise les variables `http_proxy`, `https_proxy`, `no_proxy` (ou leurs
+équivalents majuscules) héritées du client. Aucun contournement automatique du proxy,
+aucune désactivation de TLS, aucune modification du VPN. Si Python/curl atteint
+Supabase mais que le MCP échoue, vérifier le transport et l’environnement du client
+avant d’attribuer le problème au VPN. Après une mise à jour du serveur, fermer et
+rouvrir la session du client pour redémarrer son processus MCP.
+
+Transport : [EnvHttpProxyAgent officiel](https://raw.githubusercontent.com/nodejs/undici/v6.29.1/docs/docs/api/EnvHttpProxyAgent.md), version épinglée.

@@ -145,3 +145,10 @@ Sans projet Supabase et sans moteur installé/configuré sur le PC, nous ne pouv
 - Interface : bouton dans chaque projet ; aucune exécution au changement. Les données déjà lues dans une session ne peuvent pas être effacées par Supabase, ce que précise l’interface. Migration010 et enregistrement unique du compte restent à effectuer dans le tableau de bord.
 - Dossier : formulaire du chemin exact affiché avant la liste des dépôts connus, panneau ouvert pour un projet non associé, instructions pour copier le chemin depuis Fichiers sur le PC. Nouveau dossier vide déjà pris en charge, aucun rattachement obligatoire au kanban. Aucun navigateur de fichiers distant ni port supplémentaire. Les dossiers existants non vides sans Git restent refusés par le worker.
 - Tests SQL réels PGlite : MFA, compte agent non autorisé à changer la sélection, autre propriétaire, refus de lire/modifier l’ancien projet, recherche limitée, blocage pendant claim, projet futur sans nouveau SQL et désélection. 74 tests unitaires/SQL réussis.
+
+
+## 9 novembre 2026 — correction du proxy du MCP
+
+- Échec réel signalé dans le client : connexion Supabase impossible. Diagnostic différentiel : Python et curl atteignent Supabase ; fetch de Node20 ignore le proxy d’environnement. L’absence supposée de wg0 ne suffisait donc pas à expliquer cet échec. Aucune modification réseau/VPN réalisée.
+- Correction permanente : transport Undici6.29.1 avec EnvHttpProxyAgent, initialisation différée, HTTP(S)_PROXY et NO_PROXY respectés. Validation TLS conservée, pas de repli direct contournant un proxy en échec, pas de relance automatique des mutations ; secrets toujours privés.
+- 13 tests TypeScript MCP et6 tests Python passent, compilation réussie. Test local de tunnel via proxy, exemption NO_PROXY et refus en cas de proxy indisponible. Vérification réelle en lecture seule par SDK MCP stdio et launcher enregistré : authentification et liste du projet « Ecrire une chanson » réussies. Aucun ticket lu/modifié ni modèle lancé. Les clients déjà ouverts doivent relancer leur session pour charger le serveur corrigé.
