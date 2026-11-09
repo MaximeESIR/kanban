@@ -6,6 +6,8 @@ Application personnelle de projets, kanban et notes. Interface React / TypeScrip
 
 ## Recherche sans PC ni IA
 
+Dans **Paramètres de recherche**, en bas de page, choisis **Sans IA · sur cet appareil** ou **Avec IA · sur mon PC**. Le choix est conservé par compte sur cet appareil et commun aux notes et projets. Groq reste signalé comme indisponible tant que son intégration séparée n’est pas activée ; aucun basculement automatique vers un service externe.
+
 Dans Notes et dans chaque projet, **Rechercher sans IA** classe les documents déjà chargés sur l’appareil par correspondance de mots, avec accents ignorés, préfixes et petites fautes tolérées. Les résultats ouvrent la note ou le ticket et affichent un extrait. Les brouillons de notes sont inclus ; les images intégrées ne sont pas indexées. Aucun appel au PC, à Groq ou à un modèle, aucun index envoyé à un service. Hors ligne, seules les données déjà disponibles dans l’espace ouvert sont recherchables ; les modifications non encore synchronisées depuis un autre appareil restent absentes. Cette recherche lexicale ne comprend pas les synonymes comme une recherche sémantique.
 
 ## MCP : Claude, Codex et Vibe

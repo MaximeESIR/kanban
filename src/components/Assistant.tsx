@@ -1,3 +1,4 @@
+import { SearchPreferences, useSearchMode } from './SearchSettings'
 import { subscribeWorkspace } from '../lib/events'
 import { ExecutionProvider } from './Execution'
 import { createContext, useContext, type ReactNode, useEffect, useRef, useState } from 'react'
@@ -123,7 +124,9 @@ export function AssistantProvider({
       <InstructionsContext.Provider
         value={{ prompt: sharedPrompt, setPrompt: rememberPrompt, error: promptError }}
       >
-        <ExecutionProvider enabled={enabled}>{children}</ExecutionProvider>
+        <SearchPreferences key={ownerId} ownerId={ownerId}>
+          <ExecutionProvider enabled={enabled}>{children}</ExecutionProvider>
+        </SearchPreferences>
       </InstructionsContext.Provider>
     </PCContext.Provider>
   )
@@ -144,6 +147,7 @@ export function Assistant({
   onOpen?: (id: string) => void
 }) {
   const { pcs, jobs, error: connectionError } = useContext(PCContext)
+  const { mode: searchMode } = useSearchMode()
   const instructions = useContext(InstructionsContext)
   const [open, setOpen] = useState(false),
     [searchPrompt, setSearchPrompt] = useState(''),
@@ -245,6 +249,7 @@ export function Assistant({
       setError(friendlyError(e))
     }
   }
+  if (searchDocs && searchMode !== 'pc') return null
   const can = (kind: JobKind) =>
     enabled && navigator.onLine && available(pcs, kind) && !running && !recording
   return (

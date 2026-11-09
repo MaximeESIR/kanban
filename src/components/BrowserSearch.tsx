@@ -1,3 +1,4 @@
+import { useSearchMode } from './SearchSettings'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { createBrowserIndex, type SearchDocument } from '../lib/browserSearch'
 
@@ -8,10 +9,12 @@ export function BrowserSearch({
   documents: SearchDocument[]
   onOpen: (id: string) => void
 }) {
+  const { mode } = useSearchMode()
   const [query, setQuery] = useState('')
   const deferred = useDeferredValue(query)
   const search = useMemo(() => createBrowserIndex(documents), [documents])
   const results = useMemo(() => search(deferred), [search, deferred])
+  if (mode !== 'browser') return null
   return (
     <section className="assistant-box" aria-label="Recherche sans IA">
       <label className="field">

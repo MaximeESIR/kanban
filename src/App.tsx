@@ -1,3 +1,4 @@
+import { SearchSettings } from './components/SearchSettings'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
@@ -872,6 +873,7 @@ function Workspace({
               onCreate={() => setDialog({ kind: 'project' })}
             />
           )}
+          <SearchSettings />
           <InstallApp />
         </main>
       </div>
