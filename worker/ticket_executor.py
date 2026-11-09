@@ -32,7 +32,7 @@ class ExecutionError(Exception): pass
 
 def available_models():
     try:
-        return MODEL_CATALOG.get(codex_binary, clean_env())
+        return MODEL_CATALOG.get(codex_binary, codex_env())
     except ExecutionError:
         return []
 
@@ -51,6 +51,37 @@ def clean_env():
     env = {k:os.environ[k] for k in allowed if k in os.environ}
     env['PATH'] = '/usr/local/bin:/usr/bin:/bin'
     return env
+
+def codex_env():
+    # Only the Codex host needs model connectivity. Commands use policy()'s
+    # inherit=none and network=false; never give them proxy or service secrets.
+    env=clean_env()
+    for key in ('http_proxy','https_proxy','no_proxy','HTTP_PROXY','HTTPS_PROXY','NO_PROXY'):
+        if key in os.environ:env[key]=os.environ[key]
+    return env
+
+def execution_phase(folder):
+    phase='Connexion au modèle Codex'
+    try:
+        with (folder/'events.jsonl').open('rb') as stream:
+            stream.seek(0,2); size=stream.tell()
+            stream.seek(max(0,size-65536)); lines=stream.read(65536).decode('utf8',errors='replace').splitlines()
+        for line in lines:
+            try:event=json.loads(line)
+            except (ValueError,TypeError):continue
+            if not isinstance(event,dict):continue
+            item=event.get('item')
+            if not isinstance(item,dict):item={}
+            message=event.get('message',item.get('message',''))
+            if isinstance(message,str) and ('Reconnecting' in message or 'routing discovery timed out' in message):
+                phase='Connexion au modèle en échec ; tentative de reconnexion'
+            elif item.get('type') in ('command_execution','tool_call','mcp_tool_call'):
+                phase='Codex utilise ses outils dans le dossier du projet'
+            elif item.get('type') in ('agent_message','reasoning'):
+                phase='Codex traite le ticket'
+            elif event.get('type')=='turn.completed':phase='Codex a terminé ; préparation du rapport'
+    except OSError:pass
+    return phase
 
 def git(repo, *args, timeout=30):
     env=clean_env()
@@ -313,7 +344,7 @@ class TicketExecutor:
             self.log=(folder/'events.jsonl').open('wb');os.chmod(folder/'events.jsonl',0o600)
             if not self.gateway.rpc('worker_development_pulse',{'p_id':job['id'],'p_lease':job['lease'],'p_phase':'Préparation vérifiée ; démarrage Codex'}):
                 raise ExecutionError('Demande annulée ou accès retiré pendant la préparation')
-            self.process=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=self.log,stderr=self.log,env=clean_env(),start_new_session=True)
+            self.process=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=self.log,stderr=self.log,env=codex_env(),start_new_session=True)
             self.process.stdin.write(prompt.encode());self.process.stdin.close()
             self.last_pulse=self.last_contact=time.monotonic();self.completed=None
             self.watch_stop.clear();self.watchdog_tripped=False
@@ -392,7 +423,7 @@ class TicketExecutor:
             if not ok:self.close();return True
         if self.process.poll() is None:
             # Fixed public phase; raw tool output stays local, never copied into notifications.
-            self.phase='Codex travaille et vérifie les changements'
+            self.phase=execution_phase(self.folder) if self.folder else 'Connexion au modèle Codex'
             if self.folder and (self.folder/'events.jsonl').stat().st_size>20_000_000:
                 self.stop()
             else:return False

@@ -158,3 +158,25 @@ print(json.dumps({'type':'turn.completed'}))
         with self.assertRaises(ConnectionError):events.receive({'event':'system','payload':{'status':'error'}})
 
 if __name__=='__main__':unittest.main()
+
+
+class CodexNetworkTests(unittest.TestCase):
+    def test_model_proxy_is_preserved_but_never_given_to_commands(self):
+        from ticket_executor import codex_env
+        with patch.dict(os.environ,{'https_proxy':'http://user:secret@proxy.test:3128','ATELIER_WORKER_PASSWORD':'private','OPENAI_API_KEY':'private'}):
+            env=codex_env()
+        self.assertEqual(env['https_proxy'],'http://user:secret@proxy.test:3128')
+        self.assertNotIn('ATELIER_WORKER_PASSWORD',env)
+        self.assertNotIn('OPENAI_API_KEY',env)
+        parsed=tomllib.loads('\n'.join(policy(Path('/tmp/project'),Path('/tmp/scratch'))[1::2]))
+        self.assertEqual(parsed['shell_environment_policy']['inherit'],'none')
+        self.assertNotIn('https_proxy',parsed['shell_environment_policy']['set'])
+        self.assertFalse(parsed['permissions']['atelier']['network']['enabled'])
+    def test_phase_reports_reconnection_without_exposing_log_contents(self):
+        from ticket_executor import execution_phase
+        with tempfile.TemporaryDirectory() as root:
+            path=Path(root)
+            (path/'events.jsonl').write_text('not JSON\n'+json.dumps({'type':'error','message':'Reconnecting... SECRET routing discovery timed out'})+'\n')
+            self.assertEqual(execution_phase(path),'Connexion au modèle en échec ; tentative de reconnexion')
+            with (path/'events.jsonl').open('a') as stream:stream.write(json.dumps({'type':'item.started','item':{'type':'command_execution','command':'SECRET'}})+'\n')
+            self.assertEqual(execution_phase(path),'Codex utilise ses outils dans le dossier du projet')
